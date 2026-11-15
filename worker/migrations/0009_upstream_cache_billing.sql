@@ -1,0 +1,8 @@
+ALTER TABLE models ADD COLUMN cache_read_price_per_m REAL NOT NULL DEFAULT 0;
+ALTER TABLE models ADD COLUMN cache_write_price_per_m REAL NOT NULL DEFAULT 0;
+
+ALTER TABLE usage ADD COLUMN cache_read_tokens INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE usage ADD COLUMN cache_write_tokens INTEGER NOT NULL DEFAULT 0;
+
+ALTER TABLE daily_stats ADD COLUMN cache_read_tokens INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE daily_stats ADD COLUMN cache_write_tokens INTEGER NOT NULL DEFAULT 0;

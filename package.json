@@ -1,0 +1,25 @@
+{
+  "name": "cloudflare-personal-ai-gateway",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Cloudflare-native personal AI Gateway (V1 MVP)",
+  "scripts": {
+    "build": "node scripts/prepare-config.mjs && pnpm --filter @aigw/web build",
+    "build:web": "node scripts/prepare-config.mjs && pnpm --filter @aigw/web build",
+    "dev:worker": "pnpm --filter @aigw/worker dev",
+    "dev:web": "pnpm --filter @aigw/web dev",
+    "dev": "pnpm run build:web && pnpm run dev:worker",
+    "deploy": "node scripts/opensource-isolation.mjs deny-remote",
+    "test": "pnpm --filter @aigw/worker test",
+    "typecheck": "pnpm --filter @aigw/worker typecheck && pnpm --filter @aigw/web typecheck",
+    "db:migrate:local": "pnpm --filter @aigw/worker db:migrate:local",
+    "deploy:worker": "node scripts/opensource-isolation.mjs deny-remote",
+    "db:migrate:remote": "node scripts/opensource-isolation.mjs deny-remote",
+    "check:isolation": "node scripts/opensource-isolation.mjs check",
+    "test:isolation": "node --test scripts/opensource-isolation.test.mjs"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.2"
+  },
+  "packageManager": "pnpm@11.19.0"
+}
