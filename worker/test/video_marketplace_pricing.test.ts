@@ -59,8 +59,8 @@ describe("public video DTO and exact rate scaling",()=>{
     for(const quotes of [[],[{...config.video.quotes[0],price:-1}]]) expect(publicVideoPricing({...row,config_json:JSON.stringify({...config,video:{...config.video,quotes}})})!.quotes).toEqual([]);
     expect(publicVideoPricing(row,NaN)!.quotes).toEqual([]);
   });
-  it("preserves Moyuu endpoint and scalar successful-call price without applying service twice",()=>{
-    const legacy={...row,price_per_call:0.5,config_json:JSON.stringify({model_type:"video",video:{adapter:"moyuu",task_id_path:"data.id",sizes:["1280x720"]}})};
+  it("preserves generic endpoint and scalar successful-call price without applying service twice",()=>{
+    const legacy={...row,price_per_call:0.5,config_json:JSON.stringify({model_type:"video",video:{adapter:"generic",task_id_path:"data.id",sizes:["1280x720"]}})};
     expect(publicVideoPricing(legacy,2,3)).toEqual({endpoint:"/v1/video/generations",settlement:"success",quotes:[{resolution:null,has_reference_video:null,unit:"call",price:1.5}]});
   });
 });
@@ -88,7 +88,7 @@ describe("video marketplace SSR and same-variant comparison",()=>{
       for(const component of [ModelOfferCard,OfferPrices]) { const text=plain(render(component,{m}));expect(text).toContain("未定价");expect(text).not.toContain("¥99");expect(text).not.toContain("¥0");expect(text).not.toContain("免费"); }
     }
   });
-  it("retains old Moyuu SSR, successful-call prices and endpoint without treating it as standard call",()=>{
+  it("retains old generic SSR, successful-call prices and endpoint without treating it as standard call",()=>{
     const m=offer("legacy",{video_pricing:undefined,chat_endpoint:"/v1/video/generations",price_per_call:0.25});
     expect(videoQuotes(m)).toEqual([{resolution:null,has_reference_video:null,unit:"call",price:0.25}]);
     const text=plain(render(ModelOfferCard,{m}));expect(text).toContain("¥0.25/成功任务次");expect(text).toContain("POST /v1/video/generations");expect(text).toContain("不按秒计费");

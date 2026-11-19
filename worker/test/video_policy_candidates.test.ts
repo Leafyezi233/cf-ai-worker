@@ -12,7 +12,7 @@ const input: VideoRequest = { model:"public-video", prompt:"A quiet river", seco
 const auth = { authorization:"Bearer " + TOKEN };
 type Limits = { sizes?:string[]; seconds_min?:number; seconds_max?:number; references?:number };
 function config(limits: Limits = {}) {
-  return JSON.stringify({ model_type:"video", video:{ adapter:"moyuu", task_id_path:"data.task_id",
+  return JSON.stringify({ model_type:"video", video:{ adapter:"generic", task_id_path:"data.task_id",
     sizes:limits.sizes ?? [input.size], seconds_min:limits.seconds_min ?? 3, seconds_max:limits.seconds_max ?? 15,
     ...(limits.references ? { reference_images:{mapping:"image_images_url",max_images:limits.references} } : {}) } });
 }

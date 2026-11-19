@@ -65,7 +65,7 @@ export function validateVideoRequest(body: unknown): body is VideoRequest {
       && new Set(b.reference_image_ids).size === b.reference_image_ids.length));
 }
 function frozenRoute(task: VideoTask): FrozenVideoRoute { return JSON.parse(task.route_json) as FrozenVideoRoute; }
-export function readMoyuuVideoPoll(reply: unknown, expectedTaskId?: string): {status:string|null; result:unknown} {
+export function readGenericVideoPoll(reply: unknown, expectedTaskId?: string): {status:string|null; result:unknown} {
   if (!reply || typeof reply !== "object" || Array.isArray(reply)) return {status:null,result:undefined};
   const root = reply as Record<string,unknown>;
   if (Object.prototype.hasOwnProperty.call(root,"code") && root.code !== "success") return {status:null,result:undefined};
@@ -97,7 +97,7 @@ function videoRequestError(row: Parameters<typeof videoModelError>[0], body: Vid
   const config = readVideoConfig(row)!;
   if (config.adapter === "doubao") return body.doubao && normalizeDoubaoRequest(config,body.doubao) ? null : "doubao_video_spec_not_allowed";
   if (body.secure) return config.adapter === "secure_skill" ? secureRequestError(config,body.secure) : "secure_video_model_required";
-  if (config.adapter !== "moyuu") return "legacy_video_model_required";
+  if (config.adapter !== "generic") return "legacy_video_model_required";
   if (!config.sizes.includes(body.size) || body.seconds < config.seconds_min || body.seconds > config.seconds_max) return "video_spec_not_allowed";
   const count = body.reference_image_ids?.length ?? 0;
   if (count && (!config.reference_images || count > config.reference_images.max_images)) return "video_references_not_allowed";
@@ -195,7 +195,7 @@ async function upstreamJson(env: Env, route: FrozenVideoRoute, method: "GET" | "
     } else {reply=JSON.parse(await readBoundedBody(response.body,MAX_VIDEO_RESPONSE_BYTES,controller.signal));}
     clearTimeout(timer);
     if(diagnosticTaskId){
-      const poll=readMoyuuVideoPoll(reply,method === "GET" ? taskId : undefined);
+      const poll=readGenericVideoPoll(reply,method === "GET" ? taskId : undefined);
       if(method==="POST"){
         await capture("create");
         const id=readVideoPath(reply,route.video.task_id_path);
@@ -222,7 +222,7 @@ export async function refreshVideoTask(env: Env, task: VideoTask, deadline = Dat
     const route = frozenRoute(task);
     const diagnostics = await withVideoDiagnosticDeadline(()=>hasVideoDiagnostics(env,task.id),false,Math.min(250,deadline-Date.now()));
     const body = await upstreamJson(env,route,"GET",task.upstream_task_id,undefined,Math.min(20_000,deadline-Date.now()),diagnostics ? task.id : undefined) as Record<string,unknown>;
-    const poll = readMoyuuVideoPoll(body,task.upstream_task_id);
+    const poll = readGenericVideoPoll(body,task.upstream_task_id);
     if (poll.status === "SUCCESS") {
       const result = poll.result;
       if (safeVideoUrl(result)) { await finishVideoPoll(env,task.id,{status:"succeeded",result_url:result},claim); return true; }

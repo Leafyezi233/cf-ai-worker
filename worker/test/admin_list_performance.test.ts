@@ -126,7 +126,7 @@ it("reports warm local SQLite admin list payloads and verifies narrow query boun
     }));
     const reduction = (oldBytes: number, newBytes: number) => ({ oldBytes, newBytes, savedBytes: oldBytes - newBytes, savedPercent: (oldBytes - newBytes) / oldBytes * 100 });
     const report = {
-      producer: "moyuugpt/gpt-6.1-sol", generatedAt: new Date().toISOString(),
+      producer: "local-benchmark", generatedAt: new Date().toISOString(),
       fixture: { accounts: 106, models: 95, providers: 32, wallets: 106, usageRows: 1060, usageRowsPerAccount: 10, syntheticOnly: true, realSecrets: false },
       methodology: {
         engine: "realD1 node:sqlite in-memory SQLite", node: nodeVersion,

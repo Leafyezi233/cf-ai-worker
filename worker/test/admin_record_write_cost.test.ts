@@ -51,7 +51,7 @@ it("records paired seeded real-SQLite task insert/update and audit append costs 
   }
   mkdirSync(dirname(fileURLToPath(reportUrl)),{recursive:true});
   const report=existsSync(reportUrl)?JSON.parse(readFileSync(reportUrl,"utf8")):{};
-  report.writeCost={producer:"moyuugpt/gpt-6.1-sol",warmups:3,samples:15,operationsPerSample,
+  report.writeCost={producer:"local-benchmark",warmups:3,samples:15,operationsPerSample,
     methodology:"Two independently seeded identical in-memory SQLite databases with the full prior schema and mixed states. Only post DB receives the two new indexes. Alternating paired sample order; each sample runs 200 real prepared INSERT/UPDATE statements inside BEGIN then ROLLBACK. Timing includes statement preparation/execution, excludes BEGIN/ROLLBACK; not durable disk commit/network/D1 billing. Index bytes are incremental page_count*page_size during isolated per-index creation before writes (not an estimated row size). No performance pass/fail threshold.",results};
   writeFileSync(reportUrl,JSON.stringify(report,null,2)+"\n"); console.log(JSON.stringify(report.writeCost));
 },120000);

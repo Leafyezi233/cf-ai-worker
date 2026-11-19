@@ -238,7 +238,7 @@ describe("sub-token Auto integration (real SQLite, fetch-only upstream)", () => 
   it("ranks multi-offer VIDEO Auto by Monday peak price, freezes one channel/credential/quote, replays without POST and settles once for the sub", async () => {
     const clock = vi.spyOn(Date, "now").mockReturnValue(Date.UTC(2026, 10, 2, 4));
     const videoModel = "sub-auto-video";
-    const config = { model_type: "video", video: { adapter: "moyuu", task_id_path: "data.task_id",
+    const config = { model_type: "video", video: { adapter: "generic", task_id_path: "data.task_id",
       sizes: ["1920x1080"], seconds_min: 3, seconds_max: 15, failed_statuses: ["FAILED"] } };
     const groups: Record<string, ServiceGroupRow> = {};
     for (const [id, price, peak] of [["base-cheap", 1, 5], ["chosen", 2, 1.5], ["third", 4, 1]] as const) {

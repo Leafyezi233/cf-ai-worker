@@ -6,7 +6,7 @@ import { auditApp } from "../src/admin/audit";
 import { videoTasksApp } from "../src/admin/video-tasks";
 const require=createRequire(import.meta.url);const {writeFileSync,mkdirSync}=require("node:fs");const {dirname}=require("node:path");const {fileURLToPath}=require("node:url");const {Buffer}=require("node:buffer");
 it("records 10k/100k mixed-state and sparse-filter local scalability",async()=>{
- const report:any={producer:"moyuugpt/gpt-6.1-sol",samples:15,warmups:3,note:"Local warm SQLite handler+JSON; excludes auth/schema/network. Measures current app schema including admin-record indexes; extra local_probe indexes are isolated diagnostic duplicates, not a preoptimization baseline. No latency SLA or online billing conclusion.",scales:[]};
+ const report:any={producer:"local-benchmark",samples:15,warmups:3,note:"Local warm SQLite handler+JSON; excludes auth/schema/network. Measures current app schema including admin-record indexes; extra local_probe indexes are isolated diagnostic duplicates, not a preoptimization baseline. No latency SLA or online billing conclusion.",scales:[]};
  for(const n of [10000,100000]){
  const {d1,env}=await makeWalletFixture();const base=Date.UTC(2026,10,15);const cte="WITH RECURSIVE n(x) AS (SELECT 1 UNION ALL SELECT x+1 FROM n WHERE x<"+n+") ";
  d1.sql(cte+"INSERT INTO usage(device_id,model,status_code,created_at) SELECT 'dev-1',CASE WHEN x=1 THEN 'rare' ELSE 'common' END,200,"+base+"+x FROM n");

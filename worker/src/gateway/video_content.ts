@@ -51,7 +51,7 @@ function contentSource(task: VideoTask): {url: string; credential: string} | nul
       if (typeof r.endpoint!=="string" || !r.endpoint.endsWith("/videos") || secureVideoEndpoint(r.endpoint.slice(0,-"/videos".length)) !== r.endpoint || !videoUpstreamModel(r.upstream_model) || r.upstream_model!==r.video.upstream_model || !isEncryptedSecret(r.credential)) return null;
       return {url:r.endpoint + "/" + encodeURIComponent(task.upstream_task_id) + "/content",credential:r.credential};
     }
-    if (r.video?.adapter !== "moyuu" || typeof r.endpoint !== "string" || r.endpoint.length > 2048
+    if (r.video?.adapter !== "generic" || typeof r.endpoint !== "string" || r.endpoint.length > 2048
       || /[\\\s%]/.test(r.endpoint) || /\/\.{1,2}(?:\/|$)/.test(r.endpoint) || !isEncryptedSecret(r.credential)) return null;
     const u = new URL(r.endpoint);
     const h = u.hostname.toLowerCase();

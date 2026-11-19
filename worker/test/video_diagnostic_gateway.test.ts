@@ -7,7 +7,7 @@ import {resetRateLimitMemory} from "../src/gateway/ratelimit";
 import {createRealD1,makeEnv,seedDevice,seedProvider,seedModel,wallet,holdRows,usageRows,TOKEN,DEVICE_ID,type RealD1} from "./helpers/realGatewayEnv";
 import type {Env} from "../src/types";
 let db:RealD1,env:Env;
-const cfg={model_type:"video",video:{adapter:"moyuu",task_id_path:"data.task_id",sizes:["1920x1080"],failed_statuses:["FAILED"]}};
+const cfg={model_type:"video",video:{adapter:"generic",task_id_path:"data.task_id",sizes:["1920x1080"],failed_statuses:["FAILED"]}};
 const input={model:"video",prompt:"private prompt",seconds:5,size:"1920x1080"};
 async function admin(path:string,body?:unknown,auth=true){const cookie=buildSessionCookie(await signSession("session",0)).split(";")[0];return adminApp.request("https://gw.test/video-tasks"+path,{method:body===undefined?"GET":"POST",headers:{...(auth?{cookie}:{}),"content-type":"application/json"},...(body===undefined?{}:{body:JSON.stringify(body)})},env);}
 async function req(method="POST",key="diag-task-0001",path="/video/generations"){return gatewayApp.request("https://gw.test"+path,{method,headers:{authorization:"Bearer "+TOKEN,"content-type":"application/json","Idempotency-Key":key},...(method==="POST"?{body:JSON.stringify(input)}:{})},env);}

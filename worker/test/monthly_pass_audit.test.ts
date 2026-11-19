@@ -78,7 +78,7 @@ describe("monthly security/performance independent local audit",()=>{
     expect(new Set(writes).size).toBe(1);
     rows.push({mode,history,samples:samples.length,firstTableMutations:first,steadyTableMutations:writes[0],p50Ms:percentile(samples,.5),p95Ms:percentile(samples,.95),newRequestFundingRows:mode==="no-card"||mode==="triggers-off"?0:1,newRequestBucketRows:k});
    }
-   const report={producer:"moyuugpt/gpt-6.1-sol",environment:"Windows bundled Node24.21.0 real SQLite in-memory; wall time incl JS/driver, not production Workers CPU/D1 latency",seedTime:T,rows};
+   const report={producer:"local-benchmark",environment:"Windows bundled Node24.21.0 real SQLite in-memory; wall time incl JS/driver, not production Workers CPU/D1 latency",seedTime:T,rows};
    console.log("MONTHLY_AUDIT_REPORT="+JSON.stringify(report));
   }finally{vi.restoreAllMocks();}
  },120000);

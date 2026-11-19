@@ -26,7 +26,7 @@ async function ticket(token="master") {const r=await request(path+"-ticket",toke
 beforeEach(async()=>{
  resetVideoContentLimits();db=createRealD1();env={DB:db.DB,ENCRYPTION_KEY:"content-test-key"} as Env;await ensureSchema(env);
  await seedDevice("dev_1","master");await seedDevice("dev_other","other");await seedSub("sub_a");await seedSub("sub_b");
- route={endpoint:"https://moyuu.test/channel/v1/video/generations",credential:await sealSecret("upstream-secret",env.ENCRYPTION_KEY),video:{adapter:"moyuu"}};
+ route={endpoint:"https://legacy-video.test/channel/v1/video/generations",credential:await sealSecret("upstream-secret",env.ENCRYPTION_KEY),video:{adapter:"generic"}};
  db.sql("INSERT INTO video_tasks (id,device_id,sub_token_id,idempotency_key,request_hash,status,upstream_task_id,route_json,price_usd,pricing_snapshot_json,result_url,created_at,updated_at) VALUES ('vid_1','dev_1','sub_a','key-1','hash','succeeded','task_safe',?,1,'{}','https://never-fetch.test/arbitrary',1,1)",JSON.stringify(route));
 });
 afterEach(async()=>{for(const r of responses.splice(0)) {try{await r.body?.cancel();}catch{}}vi.restoreAllMocks();vi.useRealTimers();db.close();});
@@ -47,7 +47,7 @@ describe("video content ownership and encrypted tickets",()=>{
  it("issues only a same-site URL, encrypts owner/task, grants GET only, and checks live eligibility",async()=>{
   const f=vi.spyOn(globalThis,"fetch").mockImplementation(async()=>upstream());const t=await ticket("sub_a");
   expect(t.url.startsWith(path+"?ticket=")).toBe(true);expect(t.expires_at-Date.now()).toBeLessThanOrEqual(300_000);
-  expect(t.url).not.toMatch(/master|sub_a|upstream-secret|moyuu|task_safe/);
+  expect(t.url).not.toMatch(/master|sub_a|upstream-secret|generic|task_safe/);
   const r=await request(t.url,null);expect(r.status).toBe(200);await r.arrayBuffer();
   expect((await request(t.url.replace("/content?","/content-ticket?"),null,{method:"POST"})).status).toBe(401);
   db.sql("UPDATE video_tasks SET status='failed',error_code='manual_waived'");expect((await request(t.url,null)).status).toBe(409);expect(f).toHaveBeenCalledTimes(1);
@@ -81,18 +81,18 @@ describe("video content ownership and encrypted tickets",()=>{
  });
 });
 
-describe("frozen Moyuu source and sanitization",()=>{
+describe("frozen generic upstream source and sanitization",()=>{
  it("uses only constructed frozen same-origin path, own headers, no generation or billing writes",async()=>{
-  const before=db.rows("SELECT * FROM video_tasks");const f=vi.spyOn(globalThis,"fetch").mockImplementation(async()=>upstream(mp4,{"content-length":"16","set-cookie":"s=secret","location":"https://leak.test/","server":"moyuu","content-disposition":"attachment; filename=upstream-secret","etag":"upstream-id","content-range":"bytes 0-15/16","accept-ranges":"none"}));
+  const before=db.rows("SELECT * FROM video_tasks");const f=vi.spyOn(globalThis,"fetch").mockImplementation(async()=>upstream(mp4,{"content-length":"16","set-cookie":"s=secret","location":"https://leak.test/","server":"generic","content-disposition":"attachment; filename=upstream-secret","etag":"upstream-id","content-range":"bytes 0-15/16","accept-ranges":"none"}));
   const r=await request(path,"master",{headers:{"x-api-key":"do-not-forward","cookie":"private","referer":"https://client.test/","cf-connecting-ip":"192.0.2.1"}});
   expect(r.status).toBe(200);expect(new Uint8Array(await r.arrayBuffer())).toEqual(mp4);
-  const [url,init]=f.mock.calls[0];expect(url).toBe("https://moyuu.test/channel/v1/videos/task_safe/content");expect(init?.method).toBe("GET");expect(init?.redirect).toBe("manual");
+  const [url,init]=f.mock.calls[0];expect(url).toBe("https://legacy-video.test/channel/v1/videos/task_safe/content");expect(init?.method).toBe("GET");expect(init?.redirect).toBe("manual");
   expect(init?.headers).toEqual({authorization:"Bearer upstream-secret",accept:"video/mp4","accept-encoding":"identity"});
   expect(Object.fromEntries(r.headers)).toEqual({"content-type":"video/mp4","content-length":"16","content-disposition":'inline; filename="vid_1.mp4"',"accept-ranges":"none","cache-control":"private, no-store","referrer-policy":"no-referrer","x-content-type-options":"nosniff"});
   expect(db.rows("SELECT * FROM video_tasks")).toEqual(before);expect(db.rows("SELECT * FROM usage")).toHaveLength(0);expect(db.rows("SELECT * FROM reserve_holds")).toHaveLength(0);expect(f).toHaveBeenCalledTimes(1);
  });
- it.each(["http://moyuu.test/v1/video/generations","https://user:pw@moyuu.test/v1/video/generations","https://moyuu.test/v1/video/generations?key=secret","https://moyuu.test/v1/video/generations#hash","https://127.0.0.1/v1/video/generations","https://10.1.2.3/v1/video/generations","https://[::1]/v1/video/generations","https://2130706433/v1/video/generations","https://localhost/v1/video/generations","https://foo.localhost/v1/video/generations","https://moyuu.test/v1/../video/generations","https://moyuu.test/v1/%2e%2e/video/generations","https://moyuu.test/v1/videos", "https://moyuu.test:8443/v1/video/generations"])("rejects unsafe source %s before fetch",async endpoint=>{setRoute({endpoint});const f=vi.spyOn(globalThis,"fetch");expect((await request()).status).toBe(409);expect(f).not.toHaveBeenCalled();});
- it("rejects non-Moyuu adapter, plaintext credentials, unsafe upstream id and missing/unsafe result",async()=>{
+ it.each(["http://legacy-video.test/v1/video/generations","https://user:pw@legacy-video.test/v1/video/generations","https://legacy-video.test/v1/video/generations?key=secret","https://legacy-video.test/v1/video/generations#hash","https://127.0.0.1/v1/video/generations","https://10.1.2.3/v1/video/generations","https://[::1]/v1/video/generations","https://2130706433/v1/video/generations","https://localhost/v1/video/generations","https://foo.localhost/v1/video/generations","https://legacy-video.test/v1/../video/generations","https://legacy-video.test/v1/%2e%2e/video/generations","https://legacy-video.test/v1/videos", "https://legacy-video.test:8443/v1/video/generations"])("rejects unsafe source %s before fetch",async endpoint=>{setRoute({endpoint});const f=vi.spyOn(globalThis,"fetch");expect((await request()).status).toBe(409);expect(f).not.toHaveBeenCalled();});
+ it("rejects non-generic adapter, plaintext credentials, unsafe upstream id and missing/unsafe result",async()=>{
   const f=vi.spyOn(globalThis,"fetch");
   for(const over of [{video:{adapter:"openai"}},{credential:"plaintext"}]) {setRoute(over);expect((await request()).status).toBe(409);}
   setRoute({});db.sql("UPDATE video_tasks SET upstream_task_id='../evil'");expect((await request()).status).toBe(409);

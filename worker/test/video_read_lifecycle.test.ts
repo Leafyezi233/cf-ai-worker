@@ -114,7 +114,7 @@ const bundle=await build({stdin:{contents:imports,resolveDir:resolve('worker'),l
 const {openReferenceBody,videoContentHandler,resetVideoContentLimits,createRealD1,sealSecret,sha256Hex,Hono}=await import('data:text/javascript;base64,'+Buffer.from(bundle.outputFiles[0].text).toString('base64'));
 const db=createRealD1(),env={DB:db.DB,ENCRYPTION_KEY:'memory-test'};
 db.sql('INSERT INTO devices (id,name,token_hash,enabled,created_at) VALUES (?,?,?,1,1)','dev_1','dev_1',await sha256Hex('master'));
-const route={endpoint:'https://moyuu.test/v1/video/generations',credential:await sealSecret('key',env.ENCRYPTION_KEY),video:{adapter:'moyuu'}};
+const route={endpoint:'https://legacy-video.test/v1/video/generations',credential:await sealSecret('key',env.ENCRYPTION_KEY),video:{adapter:'generic'}};
 db.sql("INSERT INTO video_tasks (id,device_id,idempotency_key,request_hash,status,upstream_task_id,route_json,price_usd,pricing_snapshot_json,result_url,created_at,updated_at) VALUES ('vid_1','dev_1','key','hash','succeeded','task_safe',?,1,'{}','https://example.test/video',1,1)",JSON.stringify(route));
 const app=new Hono();app.get('/v1/video/generations/:id/content',videoContentHandler);
 const MiB=1024*1024,chunk=65536,rows=[];

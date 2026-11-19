@@ -523,7 +523,7 @@ export default function ModelGroupsPage() {
                 setDraft({ ...draft, billing_unit: modelType === "image" || modelType === "video" ? "call" : modelType === "embedding" ? "token" : draft.billing_unit,
                   ...(modelType === "video" ? { input_price_per_m: "0", output_price_per_m: "0", cache_read_price_per_m: "0", cache_write_price_per_m: "0", search_price_per_call: "0", cache_enabled: false } : {}),
                   ...(modelType === "embedding" ? { cache_enabled: false, output_price_per_m: "0", cache_read_price_per_m: "0", cache_write_price_per_m: "0", price_per_call: "0", search_price_per_call: "0" } : {}),
-                  config_json: JSON.stringify({ ...config, model_type: modelType, ...(modelType === "video" && !config.video ? { video: { adapter: "moyuu", task_id_path: "", sizes: [], seconds_min: 3, seconds_max: 15, failed_statuses: [] } } : {}) }, null, 2) });
+                  config_json: JSON.stringify({ ...config, model_type: modelType, ...(modelType === "video" && !config.video ? { video: { adapter: "generic", task_id_path: "", sizes: [], seconds_min: 3, seconds_max: 15, failed_statuses: [] } } : {}) }, null, 2) });
               } catch (err) { setFormError(err instanceof Error ? err.message : "高级配置不是合法的 JSON 对象"); }
             }}>
               <option value="text">文本 / 推理模型</option>

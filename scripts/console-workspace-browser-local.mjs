@@ -47,7 +47,7 @@ try{
  await wait('!!document.querySelector("nav[aria-label=控制台导航]")');check("native user account password setup and authenticated workspace");
  requests.length=0;await cdp("Page.reload");await wait('!!document.querySelector("nav[aria-label=控制台导航]")');await delay(700);
  const initial=requests.filter(r=>r.path.startsWith("/console/")&&r.method==="GET");const requestMetrics={initial:initial.map(r=>r.path)};
- if(process.env.CPG_WORKSPACE_BASELINE){await writeFile(path.join(root,"preview/console-workspace-baseline.json"),JSON.stringify({producer:"moyuugpt/gpt-6.1-sol",timestamp:new Date().toISOString(),localOnly:true,requests:initial.map(r=>r.path)},null,2));console.log("BASELINE_REQUESTS="+JSON.stringify(initial.map(r=>r.path)));}
+ if(process.env.CPG_WORKSPACE_BASELINE){await writeFile(path.join(root,"preview/console-workspace-baseline.json"),JSON.stringify({producer:"local-benchmark",timestamp:new Date().toISOString(),localOnly:true,requests:initial.map(r=>r.path)},null,2));console.log("BASELINE_REQUESTS="+JSON.stringify(initial.map(r=>r.path)));}
  else {
  assert(!initial.some(r=>["/console/models","/console/model-marketplace","/console/usage","/console/tokens","/console/calls"].includes(r.path)));check("overview does not eagerly fetch models, marketplace, usage, tokens or calls");
  assert(await ev('document.body.innerText.includes("快速开始") && !document.body.innerText.includes("按模型用量")'));check("overview shows next steps without billing tables");
@@ -70,7 +70,7 @@ try{
  assert(!(await ev('location.href')).includes(credential));check("credentials absent from navigation URLs");
  assert(!requests.some(r=>r.method==="POST"&&(r.path.startsWith("/v1/")||r.path.includes("generations"))));check("no paid model or video generation request");
  const failures=responses.filter(r=>r.status>=500);assert.deepEqual(errors,[]);assert.deepEqual(failures,[]);check("no browser runtime exceptions or HTTP 5xx");
- await writeFile(path.join(root,"preview/console-workspace-browser-local.json"),JSON.stringify({producer:"moyuugpt/gpt-6.1-sol",timestamp:new Date().toISOString(),localOnly:true,realBrowser:true,nativeWorker:true,nativeD1:true,total:checks.length,passed:checks.length,checks,requestMetrics,localReferenceService:"Read-only limits fixture: uploads disabled. No production binding or paid calls.",http5xx:failures,errors},null,2));console.log("WORKSPACE_RESULT="+checks.length+"/"+checks.length);
+ await writeFile(path.join(root,"preview/console-workspace-browser-local.json"),JSON.stringify({producer:"local-benchmark",timestamp:new Date().toISOString(),localOnly:true,realBrowser:true,nativeWorker:true,nativeD1:true,total:checks.length,passed:checks.length,checks,requestMetrics,localReferenceService:"Read-only limits fixture: uploads disabled. No production binding or paid calls.",http5xx:failures,errors},null,2));console.log("WORKSPACE_RESULT="+checks.length+"/"+checks.length);
  }
 
 }catch(error){console.error(error.message);process.exitCode=1;}finally{

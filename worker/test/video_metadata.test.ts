@@ -16,7 +16,7 @@ import { createRealD1, type RealD1 } from "./helpers/realD1";
 import { makeEnv, seedGroup, seedGroupMembers, seedModel, seedProvider } from "./helpers/realGatewayEnv";
 import type { Env } from "../src/types";
 
-const video = { adapter: "moyuu", task_id_path: "data.private_task", sizes: ["1280x720"], seconds_min: 4, seconds_max: 10 };
+const video = { adapter: "generic", task_id_path: "data.private_task", sizes: ["1280x720"], seconds_min: 4, seconds_max: 10 };
 const config = (over: Record<string, unknown> = {}) => JSON.stringify({ model_type: "video", video: { ...video, ...over } });
 const callOnly = { input_price_per_m: 0, output_price_per_m: 0, cache_read_price_per_m: 0, cache_write_price_per_m: 0, search_price_per_call: 0, price_per_call: 0.25, billing_unit: "call" };
 const row = (provider_type = "openai") => ({ id: "v", provider_id: "p", provider_type, provider_name: "PRIVATE-UPSTREAM", model_name: "video-public", display_name: "Video", alias: "video-alias", enabled: 1, model_public: 1, config_json: config(), ...callOnly });
@@ -65,7 +65,7 @@ describe("video metadata isolation", () => {
       const single = await gatewayApp.request("http://local/models/" + model.id, {}, env); expect(single.status).toBe(200); payloads.push(await single.json());
     }
     const tags = await gatewayApp.request("http://local/tags", {}, env); expect(tags.status).toBe(200); payloads.push(await tags.json());
-    for (const payload of payloads) for (const secret of ["private_task", "moyuu", "PRIVATE-UPSTREAM", "PRIVATE-FALLBACK", "PRIVATE-KEY", "PRIVATE-MODEL", "private-upstream.example"]) expect(JSON.stringify(payload)).not.toContain(secret);
+    for (const payload of payloads) for (const secret of ["private_task", "generic", "PRIVATE-UPSTREAM", "PRIVATE-FALLBACK", "PRIVATE-KEY", "PRIVATE-MODEL", "private-upstream.example"]) expect(JSON.stringify(payload)).not.toContain(secret);
   });
   it("skips all paid protocol and reasoning probes for stored and unsaved video", async () => {
     const { db, env } = fixture(); seedVideo(db); seedModel(db, { id: "text", model_name: "text" });
@@ -100,7 +100,7 @@ describe("strict explicit video configuration", () => {
   it("requires explicit video config and call billing, without inventing task IDs or failure statuses", () => {
     expect(CreateModelSchema.safeParse(create).success).toBe(true); expect(CreateModelGroupSchema.safeParse({ name: "vg", ...callOnly, config_json: config() }).success).toBe(true);
     expect(readVideoConfig({ config_json: config({ seconds_min: undefined, seconds_max: undefined }) })).toMatchObject({ failed_statuses: [], seconds_min: 3, seconds_max: 15, task_id_path: "data.private_task" });
-    for (const cfg of ['{"model_type":"video"}', '{"model_type":"video","video":null}', JSON.stringify({ model_type: "video", video: { adapter: "moyuu", sizes: ["1280x720"] } })]) expect(CreateModelSchema.safeParse({ ...create, config_json: cfg }).success).toBe(false);
+    for (const cfg of ['{"model_type":"video"}', '{"model_type":"video","video":null}', JSON.stringify({ model_type: "video", video: { adapter: "generic", sizes: ["1280x720"] } })]) expect(CreateModelSchema.safeParse({ ...create, config_json: cfg }).success).toBe(false);
     expect(CreateModelSchema.safeParse({ ...create, billing_unit: "token" }).success).toBe(false);
     expect(UpdateModelSchema.safeParse({ config_json: config() }).success).toBe(true);
   });

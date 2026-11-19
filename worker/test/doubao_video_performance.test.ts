@@ -40,6 +40,6 @@ describe("video database method overhead with warm schema",()=>{
  it("compares actual gateway stages, optional raw usage and repeated reads",async()=>{
   const doubao=await flow("doubao",true),withoutUsage=await flow("doubao",false),minimax=await flow("secure_skill",false),official=await flow("doubao",true,true);
   expect(doubao.counters).toEqual(withoutUsage.counters);expect(doubao.counters.create.roundtrips).toBe(official.counters.create.roundtrips+1);
-  console.log("DOUBAO_DB_PERF_REPORT="+JSON.stringify({producer:"moyuugpt/gpt-6.1-sol",doubao,withoutUsage,minimax,official,note:"Warm schema; env.DB identity preserved; method wrappers preserve bind self. Roundtrips=top-level first/all/run+batch, batch internal calls excluded. Prepare counts top-level SQL, not trigger statements. TABLE total_changes includes trigger table mutations, NOT billed D1 rows/index writes. No RATE_LIMITER DO bound in local fixture; production read requests additionally consume a DO request."}));
+  console.log("DOUBAO_DB_PERF_REPORT="+JSON.stringify({producer:"local-benchmark",doubao,withoutUsage,minimax,official,note:"Warm schema; env.DB identity preserved; method wrappers preserve bind self. Roundtrips=top-level first/all/run+batch, batch internal calls excluded. Prepare counts top-level SQL, not trigger statements. TABLE total_changes includes trigger table mutations, NOT billed D1 rows/index writes. No RATE_LIMITER DO bound in local fixture; production read requests additionally consume a DO request."}));
  });
 });

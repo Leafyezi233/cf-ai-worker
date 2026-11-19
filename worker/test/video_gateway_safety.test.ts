@@ -8,7 +8,7 @@ import { resetRateLimitMemory } from "../src/gateway/ratelimit";
 import { createRealD1, makeEnv, seedDevice, seedProvider, seedModel, wallet, holdRows, usageRows, TOKEN, DEVICE_ID, type RealD1 } from "./helpers/realGatewayEnv";
 import type { Env } from "../src/types";
 import { createVideoAttempt, prepareVideoAttemptForPost, canReleaseRejectedVideoAttempt } from "../../web/src/utils/videoTask";
-const cfg={model_type:"video",video:{adapter:"moyuu",task_id_path:"data.task_id",sizes:["1920x1080"],failed_statuses:["FAILED"]}};
+const cfg={model_type:"video",video:{adapter:"generic",task_id_path:"data.task_id",sizes:["1920x1080"],failed_statuses:["FAILED"]}};
 const input={model:"video-model",prompt:"river",seconds:5,size:"1920x1080"};
 let db:RealD1,env:Env;
 async function request(method="POST",body:unknown=input,key="video-key-0001",path="/video/generations") {

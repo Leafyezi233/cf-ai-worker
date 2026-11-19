@@ -50,6 +50,6 @@ describe.skipIf(process.env.CPG_VIDEO_PERF !== "1")("local video settings and pa
   }
   const poll={id:"local-upstream",status:"succeeded",content:{video_url:"https://cdn.org/video.mp4"},usage:{completion_tokens:123,total_tokens:150}};
   reports.push(bench("Doubao-known-poll-shape-and-usage-only",10000,()=>{sink+=readDoubaoVideoPoll(poll,"local-upstream").status?.length??0;}));
-  console.log("VIDEO_SETTINGS_PERF_REPORT="+JSON.stringify({runtime:process.version,producer:"moyuugpt/gpt-6.1-sol",scope:"Node CPU including GC/threads and SSR serialization; excludes browser DOM/layout/network/D1/Workers CPU. Parser benchmark excludes gateway auth/billing. No before/after claim. SSR pair is not full modal; exact two parses verified separately.",reports,sink}));
+  console.log("VIDEO_SETTINGS_PERF_REPORT="+JSON.stringify({runtime:process.version,producer:"local-benchmark",scope:"Node CPU including GC/threads and SSR serialization; excludes browser DOM/layout/network/D1/Workers CPU. Parser benchmark excludes gateway auth/billing. No before/after claim. SSR pair is not full modal; exact two parses verified separately.",reports,sink}));
  },60000);
 });

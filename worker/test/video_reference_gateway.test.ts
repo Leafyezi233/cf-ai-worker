@@ -1,6 +1,6 @@
 import {afterEach,beforeEach,describe,expect,it,vi} from "vitest";
 import {gatewayApp} from "../src/gateway";
-import {pollVideoTasks,readMoyuuVideoPoll} from "../src/gateway/video";
+import {pollVideoTasks,readGenericVideoPoll} from "../src/gateway/video";
 import {pruneVideoReferenceAssets} from "../src/db/video_reference_assets";
 import {getVideoDiagnostics} from "../src/db/video_diagnostics";
 import {parseVideoContentTicket} from "../../web/src/utils/videoReferences";
@@ -14,7 +14,7 @@ class MemoryR2 {
 }
 let db:RealD1,env:Env,r2:MemoryR2;
 const input={model:"video",prompt:"private test prompt",seconds:5,size:"1920x1080"};
-const cfg={model_type:"video",video:{adapter:"moyuu",task_id_path:"data.task_id",sizes:[input.size],failed_statuses:["FAILED"],reference_images:{mapping:"image_images_url",max_images:3}}};
+const cfg={model_type:"video",video:{adapter:"generic",task_id_path:"data.task_id",sizes:[input.size],failed_statuses:["FAILED"],reference_images:{mapping:"image_images_url",max_images:3}}};
 const auth={authorization:"Bearer "+TOKEN};
 function png(){const b=new Uint8Array(64);b.set([137,80,78,71,13,10,26,10,0,0,0,13,73,72,68,82]);new DataView(b.buffer).setUint32(16,32);new DataView(b.buffer).setUint32(20,24);b[24]=8;b[25]=6;return b;}
 async function upload(){const b=png();const r=await gatewayApp.request("https://gw.test/video/reference-images",{method:"POST",headers:{...auth,"content-type":"image/png","content-length":String(b.length)},body:b},env);expect(r.status).toBe(201);return await r.json() as any;}
@@ -59,7 +59,7 @@ describe("video references and hidden content integrated gateway",()=>{
     expect(usageRows(db)).toHaveLength(1);expect(ledgerRows(db)).toHaveLength(1);expect(mock).toHaveBeenCalledTimes(3);
   });
   it.each(["SUCCESS","FAILED"])("never settles a nested %s response identifying a different task",async(status)=>{const mock=vi.spyOn(globalThis,"fetch").mockResolvedValue(Response.json({data:{task_id:"task_A"}}));const t=await (await submit()).json() as any;due(t.id);mock.mockResolvedValue(Response.json({code:"success",data:{task_id:"task_B",status,result_url:"https://cdn.test/x"}}));expect((await (await detail(t.id)).json() as any).status).toBe("pending");expect(wallet(db)?.balance_usd).toBe(10);expect(wallet(db)?.reserved_usd).toBe(2);expect(usageRows(db)).toHaveLength(0);});
-  it("refuses invalid envelopes and does not recursively guess nested terminal states",()=>{for(const reply of [{code:"error",data:{task_id:"task_A",status:"SUCCESS"}},{code:"success",data:{status:"SUCCESS"}},{code:"success",data:{task_id:"task_A",data:{status:"SUCCESS"}}}])expect(readMoyuuVideoPoll(reply,"task_A").status).toBeNull();});
+  it("refuses invalid envelopes and does not recursively guess nested terminal states",()=>{for(const reply of [{code:"error",data:{task_id:"task_A",status:"SUCCESS"}},{code:"success",data:{status:"SUCCESS"}},{code:"success",data:{task_id:"task_A",data:{status:"SUCCESS"}}}])expect(readGenericVideoPoll(reply,"task_A").status).toBeNull();});
   it("preserves hard-expired reference review until genuine task completion",async()=>{const a=await upload();const mock=vi.spyOn(globalThis,"fetch").mockResolvedValue(Response.json({data:{task_id:"task_A"}}));const t=await (await submit([a.id])).json() as any;db.sql("UPDATE video_reference_assets SET created_at=?",Date.now()-8*86400000);expect(await pruneVideoReferenceAssets(env)).toBe(1);due(t.id);mock.mockResolvedValue(Response.json({code:"success",data:{task_id:"task_A",status:"RUNNING"}}));const view=await (await detail(t.id)).json() as any;expect(view).toMatchObject({requires_review:true,error_code:"reference_assets_expired",status:"pending"});expect(wallet(db)?.reserved_usd).toBe(2);});
   it.each(["https://127.0.0.1/v1","https://private.local/v1","https://public.example:8443/v1","https://public.example/api.v1","https://public.example/v1/../hidden"])("rejects non-downloadable endpoint before paid POST %s",async(endpoint)=>{db.sql("UPDATE providers SET endpoint=?",endpoint);const mock=vi.spyOn(globalThis,"fetch");expect((await submit()).status).toBe(400);expect(mock).not.toHaveBeenCalled();expect(holdRows(db)).toHaveLength(0);});
   it("retains an opted-in create sample after a delayed claim finishes after mark-submission",async()=>{

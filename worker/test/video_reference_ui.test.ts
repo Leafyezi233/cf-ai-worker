@@ -29,7 +29,7 @@ const storage = () => {
 };
 const file = (type = "image/png", size = 128) => ({ type, size });
 const login = () => vi.stubGlobal("sessionStorage", { getItem: () => "reference-ui-token" });
-const config = (refs?: unknown) => JSON.stringify({ model_type: "video", video: { adapter: "moyuu", task_id_path: "data.id", sizes: [input.size], ...(refs !== undefined ? { reference_images: refs } : {}) } });
+const config = (refs?: unknown) => JSON.stringify({ model_type: "video", video: { adapter: "generic", task_id_path: "data.id", sizes: [input.size], ...(refs !== undefined ? { reference_images: refs } : {}) } });
 const source = (path: string) => readFileSync(new URL(path, import.meta.url), "utf8");
 afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 

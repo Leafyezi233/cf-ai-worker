@@ -183,7 +183,7 @@ const { ConsoleGuide } = await import(guidePath);
 const { serialize } = await import(modelsPath);
 const webSource = (path: string) => readFileSync(new URL("../../web/src/" + path, import.meta.url), "utf8");
 const plain = (html: string) => html.replace(/<[^>]*>/g, "");
-const videoConfig = (extra: Record<string, unknown> = {}) => ({ model_type: "video", video: { adapter: "moyuu", task_id_path: "data.task_id", sizes: ["1280x720"], ...extra }, custom: { preserved: true } });
+const videoConfig = (extra: Record<string, unknown> = {}) => ({ model_type: "video", video: { adapter: "generic", task_id_path: "data.task_id", sizes: ["1280x720"], ...extra }, custom: { preserved: true } });
 const videoOffer = (extra: Record<string, unknown> = {}) => ({ id: "video", model_name: "video-only", model_type: "video" as const, billing_unit: "call", chat_endpoint: "/v1/video/generations", service_group_id: "g", service_group_name: "视频组", is_current: true, pricing_mode: "priced", price_per_call: 0.25, input_price_per_m: 987, output_price_per_m: 986, cache_read_price_per_m: 985, cache_write_price_per_m: 984, search_price_per_call: 983, supports_reasoning: true, config_json: JSON.stringify(videoConfig()), ...extra });
 const chatOffer = { id: "chat", model_name: "chat-only", model_type: "text" as const, billing_unit: "token", chat_endpoint: "/v1/chat/completions", supports_reasoning: false, context_window: 8192, max_output_tokens: 2048 };
 function modelDraft(extra: Record<string, unknown> = {}) {
@@ -203,7 +203,7 @@ describe("video admin configuration and billing normalization", () => {
   });
   it("defaults only seconds to 3/15 and never invents failed statuses", () => {
     const parsed = parseModelTypeConfig(JSON.stringify(videoConfig()));
-    expect(parsed.video).toEqual({ adapter: "moyuu", task_id_path: "data.task_id", sizes: ["1280x720"], seconds_min: 3, seconds_max: 15 });
+    expect(parsed.video).toEqual({ adapter: "generic", task_id_path: "data.task_id", sizes: ["1280x720"], seconds_min: 3, seconds_max: 15 });
     expect(parseModelTypeConfig(JSON.stringify(videoConfig({ failed_statuses: [] }))).video).toHaveProperty("failed_statuses", []);
     expect(() => validateModelBilling(JSON.stringify(videoConfig()), "token")).toThrow("成功任务次数");
     expect(() => validateModelBilling(JSON.stringify(videoConfig()), "call")).not.toThrow();
@@ -252,7 +252,7 @@ describe("video existing-web filters and SSR", () => {
     expect(text).not.toContain("输入最低");
     expect(text).not.toContain("输出最低");
     expect(text).not.toContain("推理</");
-    for (const secret of ["task_id_path", "data.task_id", "moyuu", "failed_statuses"]) expect(html).not.toContain(secret);
+    for (const secret of ["task_id_path", "data.task_id", "generic", "failed_statuses"]) expect(html).not.toContain(secret);
   });
   it("only displays the successful task price and excludes stale noncall fees from offer details", () => {
     const html = render(ModelOfferCard, { m: videoOffer() });
@@ -292,7 +292,7 @@ describe("video existing-web filters and SSR", () => {
     expect(text).toContain("submission_unknown");
     expect(text).toContain("不是按秒计费");
     expect(text).not.toContain("data.task_id");
-    expect(text).not.toContain("moyuu");
+    expect(text).not.toContain("generic");
   });
   it("keeps the video card mounted outside tab conditionals and only activates the video tab", () => {
     const code = webSource("pages/ConsolePage.tsx");

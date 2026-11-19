@@ -139,7 +139,7 @@ const ModelConfigJsonSchema = z
     }
     if ((modelType === "video" || Object.prototype.hasOwnProperty.call(parsed, "video")) &&
       !readVideoConfig({ config_json: JSON.stringify({ ...parsed, model_type: "video" }) })) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "video requires an explicit valid adapter: moyuu with safe task_id_path and sizes, or secure_skill / doubao with declared capabilities and an exact ratecard" });
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "video requires an explicit valid adapter: generic with safe task_id_path and sizes, or secure_skill / doubao with declared capabilities and an exact ratecard" });
     }
     const profile = (parsed as Record<string, unknown>).embedding_profile;
     if (profile !== undefined && !EmbeddingProfileSchema.safeParse(profile).success) {

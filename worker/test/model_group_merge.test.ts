@@ -213,7 +213,7 @@ describe("model-group internal-pool merge (real SQLite)", () => {
 
   it("refuses incompatible video generation sizes rather than silently reducing capabilities", async () => {
     const { db, env } = fixture();
-    const cfg = (sizes: string[]) => JSON.stringify({ model_type: "video", video: { adapter: "moyuu", task_id_path: "id", sizes, seconds_min: 3, seconds_max: 10 } });
+    const cfg = (sizes: string[]) => JSON.stringify({ model_type: "video", video: { adapter: "generic", task_id_path: "id", sizes, seconds_min: 3, seconds_max: 10 } });
     db.sql("UPDATE model_groups SET billing_unit='call',input_price_per_m=0,output_price_per_m=0,cache_read_price_per_m=0,cache_write_price_per_m=0,search_price_per_call=0,price_per_call=2,config_json=?", cfg(["1280x720"]));
     db.sql("UPDATE models SET billing_unit='call',input_price_per_m=0,output_price_per_m=0,config_json=?", cfg(["1280x720"]));
     db.sql("UPDATE models SET config_json=? WHERE id='member_t'", cfg(["720x1280"]));

@@ -10,7 +10,7 @@ it("measures disclosed 10000-row-per-table native SQLite seek costs without netw
  d1.sql(cte+"INSERT INTO usage(device_id,model,status_code,created_at) SELECT 'dev-1','bench',200,"+base+"+x FROM n");
  d1.sql(cte+"INSERT INTO audit_logs(actor_type,action,target_type,summary,created_at) SELECT 'admin','bench','device','synthetic',"+base+"+x FROM n");
  d1.sql(cte+"INSERT INTO video_tasks(id,device_id,idempotency_key,request_hash,status,route_json,price_usd,pricing_snapshot_json,created_at,updated_at) SELECT printf('bench-%05d',x),'dev-1',printf('local-%05d',x),'local','pending','{}',0,'{}',"+base+"+x,"+base+"+x FROM n");
- const samples=30,warmups=5;const report:any={producer:"moyuugpt/gpt-6.1-sol",rowsPerTable:10000,samples,warmups,note:"Local warm SQLite handler+JSON timings, excludes auth/schema initialization/network. No online CPU/D1 billing claim. Seek cursors are not a transaction snapshot.",routes:{}};
+ const samples=30,warmups=5;const report:any={producer:"local-benchmark",rowsPerTable:10000,samples,warmups,note:"Local warm SQLite handler+JSON timings, excludes auth/schema initialization/network. No online CPU/D1 billing claim. Seek cursors are not a transaction snapshot.",routes:{}};
  for(const [name,app,extra] of [["usage",usageApp,""],["audit",auditApp,""],["tasks",videoTasksApp,"&status=pending"]] as const){
   const query="from="+base+"&to="+(base+11000)+"&limit=50"+extra;const first=await (await app.request("https://local.test/?"+query,{},env)).json() as any;expect(first.items).toHaveLength(50);expect(first.next_cursor).toBeTruthy();
   const timings:number[]=[],counts:number[]=[],bytes:number[]=[];const spy=vi.spyOn(env.DB,"prepare");let bodyQuery="";

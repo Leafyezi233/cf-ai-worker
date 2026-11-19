@@ -7,7 +7,7 @@ import { createServiceGroup, upsertServiceGroupModel } from "../src/db/service_g
 import type { Env } from "../src/types";
 import { createRealD1, makeEnv, seedDevice, seedModel, seedProvider, seedGroup, seedGroupMembers, seedDeviceGroups, wallet, holdRows, usageRows, ledgerRows, TOKEN, DEVICE_ID, type RealD1 } from "./helpers/realGatewayEnv";
 const MODEL = "gemini-omni-1.2-flash";
-const cfg = {model_type:"video", video:{adapter:"moyuu",task_id_path:"data.task_id",sizes:["1280x720","1920x1080"],seconds_min:3,seconds_max:15,failed_statuses:["FAILED"]}};
+const cfg = {model_type:"video", video:{adapter:"generic",task_id_path:"data.task_id",sizes:["1280x720","1920x1080"],seconds_min:3,seconds_max:15,failed_statuses:["FAILED"]}};
 const input = {model:MODEL,prompt:"A quiet river",seconds:5,size:"1920x1080"};
 let db:RealD1, env:Env;
 const calls: {url:string;method:string;body:any;auth:string|null}[] = [];

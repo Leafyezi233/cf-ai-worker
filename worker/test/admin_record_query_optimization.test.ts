@@ -29,7 +29,7 @@ afterEach(() => vi.restoreAllMocks());
 
 it("measures actual task/audit handlers plus JSON on mixed 10k/100k rows with exact before/after equality", async () => {
   const previous = existsSync(reportUrl) ? JSON.parse(readFileSync(reportUrl,"utf8")) : {};
-  const report = { ...previous, producer: "moyuugpt/gpt-6.1-sol", warmups: 3, samples: 15,
+  const report = { ...previous, producer: "local-benchmark", warmups: 3, samples: 15,
     note: "Local node:sqlite, actual Hono handlers plus response serialization/body consumption; schema warmed; excludes parent authentication/network/D1 latency. No online or billing claims. Before/after use identical seeded data. Timing is informational, not a CI threshold.",
     diagnosis: "Legacy all-state SQL uses the status/created_at index plus a global temporary ORDER BY B-tree. The same historical SELECT id still scans/sorts the range, so handler JSON serialization does not explain the main gap. Optimized all-state SQL streams the global created_at/id index without a temporary sort. projectionInvestigation replays both projected and ID-only SQL on identical data; reviewStrategyComparison tests mixed and sparse distributions.",
     [baseline ? "before" : "after"]: [] as unknown[] };

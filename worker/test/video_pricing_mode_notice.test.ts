@@ -38,7 +38,7 @@ describe("video pricing-mode guidance does not change pricing", () => {
     const html=render(raw(),"priced");
     expect(html).toContain("服务分组与峰谷倍率");expect(html).not.toContain("<button");
   });
-  it.each(["{bad","[]",JSON.stringify({model_type:"text",video:{adapter:"doubao"}}),raw("moyuu")])("leaves invalid/unrelated drafts alone: %s", configJson => {
+  it.each(["{bad","[]",JSON.stringify({model_type:"text",video:{adapter:"doubao"}}),raw("generic")])("leaves invalid/unrelated drafts alone: %s", configJson => {
     expect(videoPricingModeNotice(configJson,"auto")).toBeNull();expect(render(configJson,"auto")).toBe("");
   });
 });
