@@ -5,8 +5,8 @@ export type ConsoleSection = "overview" | "models" | "video" | "guide" | "keys" 
 export const CONSOLE_SECTIONS = [
   { key: "overview", label: "账户概览", hint: "余额、额度与快速开始", description: "查看余额、本月花费和月卡。" },
   { key: "models", label: "模型广场", hint: "查看模型能力与价格", description: "查看你可以使用的模型、能力和价格。" },
-  { key: "video", label: "视频任务", hint: "创建、查询与下载", description: "创建视频任务，查看进度并下载结果。" },
-  { key: "guide", label: "接入指南", hint: "配置客户端与 API", description: "几步完成客户端接入，并在线测试。" },
+  { key: "video", label: "视频任务", hint: "创建、查询与下载", description: "创建视频任务，查看进度并下载结果；不要重复付费提交，异常请联系管理员。" },
+  { key: "guide", label: "接入指南", hint: "配置客户端与 API", description: "几步完成客户端接入，并在线测试；密钥请勿放进公开链接。" },
   { key: "keys", label: "API 密钥", hint: "为应用创建独立子 Token", description: "为每个应用创建独立的 API 密钥（子 Token）。" },
   { key: "usage", label: "用量与账单", hint: "按时间核对调用与花费", description: "按时间范围查看调用次数、Token 和花费。" },
   { key: "security", label: "账户与安全", hint: "主 Token 调用与账户控制", description: "管理主 Token 的调用权限和登录状态。" },

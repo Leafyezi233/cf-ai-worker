@@ -1,6 +1,8 @@
 import type { DeviceRow, Env } from "../types";
 import { getCurrentMonthSpend, getDeviceById, getDeviceMonthlyCost, getSetting, getWallet } from "../db/repo";
 import { getMonthlyPassAccount } from "../db/monthly_passes";
+import { accessBudgetEnv, AccessBudgetExceeded } from "./access_budget";
+import type { RoutingPreviewPrice } from "../console/routing_preview";
 import { previewTokenRouting } from "../console/routing_preview";
 
 /** One problem that stops (or limits) every call from an account, independent of the model. */
@@ -14,18 +16,12 @@ export interface AccountIssue {
 export interface AccountModelAccess {
   name: string;
   display_name: string | null;
-  available: boolean;
+  available: boolean | null;
+  status: "available" | "denied" | "unchecked";
   /** Plain-language reason when unavailable. */
   reason: string | null;
   service_group: string | null;
-  price: null | {
-    pricing_mode: "free" | "priced";
-    billing_unit: "token" | "call";
-    input_price_per_m: number;
-    output_price_per_m: number;
-    price_per_call: number;
-    multiplier: number;
-  };
+  price: RoutingPreviewPrice | null;
 }
 
 export interface AccountAccessReport {
@@ -38,9 +34,13 @@ export interface AccountAccessReport {
   models: AccountModelAccess[];
   truncated: boolean;
   checked_at: number;
+  next_cursor: string | null;
+  partial: boolean;
+  models_loaded: boolean;
+  d1_calls: number;
 }
 
-const MAX_NAMES = 300;
+const PAGE_SIZE = 5;
 const REASONS: Record<string, string> = {
   model_not_in_scope: "没有权限：不在账户的模型范围或服务分组授权里",
   model_not_found: "当前路由里没有这个模型",
@@ -49,17 +49,17 @@ const REASONS: Record<string, string> = {
   invalid_model: "名称无效",
 };
 
-async function catalogNames(env: Env): Promise<{ names: { name: string; display_name: string | null }[]; truncated: boolean }> {
+async function catalogNames(env: Env, cursor: string, limit: number) {
   const rows = await env.DB.prepare(
     "SELECT name, MAX(display_name) AS display_name FROM (" +
-      "SELECT model_name AS name, display_name FROM models WHERE enabled = 1 " +
-      "UNION ALL SELECT name, display_name FROM model_groups WHERE enabled = 1 " +
-      "UNION ALL SELECT m.model_key AS name, NULL AS display_name FROM service_group_models m " +
-      "JOIN service_groups g ON g.id = m.service_group_id WHERE g.enabled = 1" +
-    ") GROUP BY name ORDER BY name LIMIT ?"
-  ).bind(MAX_NAMES + 1).all<{ name: string; display_name: string | null }>();
-  const list = rows.results ?? [];
-  return { names: list.slice(0, MAX_NAMES), truncated: list.length > MAX_NAMES };
+    "SELECT model_name AS name, display_name FROM models WHERE enabled = 1 " +
+    "UNION ALL SELECT alias AS name, display_name FROM models WHERE enabled = 1 AND alias IS NOT NULL " +
+    "UNION ALL SELECT name, display_name FROM model_groups WHERE enabled = 1 " +
+    "UNION ALL SELECT m.model_key AS name, NULL AS display_name FROM service_group_models m JOIN service_groups g ON g.id=m.service_group_id WHERE g.enabled=1 " +
+    "UNION ALL SELECT a.name, NULL AS display_name FROM service_model_aliases a JOIN service_groups g ON g.id=a.service_group_id WHERE a.enabled=1 AND g.enabled=1" +
+    ") WHERE name > ? AND TRIM(name) <> '' GROUP BY name ORDER BY name COLLATE BINARY LIMIT ?"
+  ).bind(cursor, limit + 1).all<{ name: string; display_name: string | null }>();
+  return rows.results ?? [];
 }
 
 export async function accountIssues(env: Env, device: DeviceRow, wallet: { available: number }, monthCost: number,
@@ -85,46 +85,59 @@ export async function accountIssues(env: Env, device: DeviceRow, wallet: { avail
   return issues;
 }
 
-export async function deviceAccessReport(env: Env, id: string): Promise<AccountAccessReport | null> {
+export async function deviceAccessReport(inputEnv: Env, id: string, options: { models?: boolean; cursor?: string; limit?: number; model?: string } = {}): Promise<AccountAccessReport | null> {
+  // Bootstrap readiness uses 29 executions and admin auth 2 in SQLite regression tests.
+  // Reserve 32 of the free-tier 50 calls even on a first-manifest request.
+  // 18 is deliberately below the 30-summary / 35-model internal ceilings.
+  const budget = accessBudgetEnv(inputEnv, 18);
+  const env = budget.env;
   const device = await getDeviceById(env, id);
   if (!device) return null;
   const now = Date.now();
-  const [walletRow, monthCost, monthly, catalog] = await Promise.all([
-    getWallet(env, id), getDeviceMonthlyCost(env, id), getMonthlyPassAccount(env, id), catalogNames(env),
-  ]);
+  const walletRow = await getWallet(env, id);
+  const monthCost = await getDeviceMonthlyCost(env, id);
+  const monthly = await getMonthlyPassAccount(env, id);
   const balance = Number(walletRow?.balance_usd) || 0, reserved = Number(walletRow?.reserved_usd) || 0;
   const sub = monthly.subscription;
   const passActive = Boolean(sub && sub.enabled && sub.starts_at <= now && sub.expires_at > now);
   const issues = await accountIssues(env, device, { available: balance - reserved }, monthCost, passActive);
-
   const models: AccountModelAccess[] = [];
-  const queue = [...catalog.names];
-  const worker = async () => {
-    for (let item = queue.shift(); item; item = queue.shift()) {
-      const preview = await previewTokenRouting(env, device, "master", item.name);
-      const route = preview.routes[0];
-      models.push({
-        name: item.name,
-        display_name: item.display_name,
-        available: preview.available,
-        reason: preview.available ? null : REASONS[preview.error || ""] || "不可用",
-        service_group: route?.service_group?.name ?? null,
-        price: route ? {
-          pricing_mode: route.price.pricing_mode, billing_unit: route.price.billing_unit,
-          input_price_per_m: route.price.input_price_per_m, output_price_per_m: route.price.output_price_per_m,
-          price_per_call: route.price.price_per_call, multiplier: route.price.multiplier,
-        } : null,
-      });
+  let next_cursor: string | null = null, partial = false;
+  const models_loaded = Boolean(options.models || options.model);
+  if (models_loaded) {
+    const limit = Math.min(PAGE_SIZE, Math.max(1, Math.floor(options.limit || PAGE_SIZE)));
+    const cursor = options.cursor || "";
+    const catalog = options.model ? [{ name: options.model, display_name: null }] : await catalogNames(env, cursor, limit);
+    const page = catalog.slice(0, limit);
+    let completedCursor = cursor;
+    for (let i = 0; i < page.length; i++) {
+      const item = page[i];
+      try {
+        const preview = await previewTokenRouting(env, device, "master", item.name, { strict: true });
+        budget.assertHealthy();
+        const route = preview.routes[0];
+        models.push({ ...item, available: preview.available, status: preview.available ? "available" : "denied",
+          reason: preview.available ? null : REASONS[preview.error || ""] || "不可用",
+          service_group: route?.service_group?.name ?? null, price: route?.price ?? null });
+        completedCursor = item.name;
+      } catch (error) {
+        if (!(error instanceof AccessBudgetExceeded)) throw error;
+        await budget.settle(); // A concurrent real DB failure must not be hidden by budget exhaustion.
+        partial = true;
+        for (const unchecked of page.slice(i)) models.push({ ...unchecked, available: null, status: "unchecked",
+          reason: "本次查询预算已用完，尚未检查；请续查或单模型诊断", service_group: null, price: null });
+        // Resume before the first unchecked name: never skip a budget-exhausted model.
+        next_cursor = options.model || completedCursor === cursor ? null : completedCursor;
+        break;
+      }
     }
-  };
-  await Promise.all(Array.from({ length: 6 }, worker));
-  models.sort((a, b) => Number(b.available) - Number(a.available) || a.name.localeCompare(b.name));
-
+    if (!partial && !options.model && catalog.length > limit) next_cursor = completedCursor;
+  }
   return {
     device_id: id, issues,
     monthly_pass: sub ? { plan_name: sub.plan_name, enabled: Boolean(sub.enabled), expires_at: sub.expires_at, active: passActive } : null,
     wallet: { balance_usd: balance, reserved_usd: reserved, available_usd: balance - reserved },
     month_cost_usd: monthCost, cost_limit_monthly: Number(device.cost_limit_monthly) || 0,
-    models, truncated: catalog.truncated, checked_at: now,
+    models, truncated: next_cursor !== null, checked_at: now, next_cursor, partial, models_loaded, d1_calls: budget.used(),
   };
 }

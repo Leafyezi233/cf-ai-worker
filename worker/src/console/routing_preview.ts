@@ -9,7 +9,7 @@ import { resolveRowBillingUnit, resolveRowPeakPricing, resolveRowPricingMode } f
 import { routeNeedsLatencies, selectCandidateRoute } from "../gateway/routing";
 import { resolveModelType } from "../gateway/model_type";
 import { embeddingPoolError } from "../gateway/embeddings";
-import { videoPoolError } from "../gateway/video_config";
+import { publicVideoPricing, type PublicVideoPricing, videoPoolError } from "../gateway/video_config";
 
 export interface RoutingPreviewPrice {
   pricing_mode: "free" | "priced";
@@ -21,6 +21,8 @@ export interface RoutingPreviewPrice {
   price_per_call: number;
   search_price_per_call: number;
   multiplier: number;
+  model_type?: ReturnType<typeof resolveModelType>;
+  video_pricing?: PublicVideoPricing;
 }
 export interface RoutingPreviewRoute {
   order: number;
@@ -46,8 +48,11 @@ export interface TokenRoutingPreview {
 }
 
 function unavailable(): never { throw new HTTPException(503); }
-function publicPrice(row: ModelWithProvider, multiplier: number): RoutingPreviewPrice {
+function publicPrice(row: ModelWithProvider, multiplier: number, serviceMultiplier = 1, scalarOverride = false): RoutingPreviewPrice {
   const mode = resolveRowPricingMode(row);
+  // servicePrice scales scalar fields only; config_json still contains the original ratecard.
+  const model_type = resolveModelType(row);
+  const video_pricing = model_type === "video" ? publicVideoPricing(row, serviceMultiplier, multiplier, scalarOverride) : null;
   if (mode === "unset" || !Number.isFinite(multiplier) || multiplier < 0) unavailable();
   const read = (key: "input_price_per_m" | "output_price_per_m" | "cache_read_price_per_m" | "cache_write_price_per_m" | "price_per_call" | "search_price_per_call") => {
     const value = row[key] ?? 0;
@@ -60,7 +65,8 @@ function publicPrice(row: ModelWithProvider, multiplier: number): RoutingPreview
   return { pricing_mode: mode, billing_unit: resolveRowBillingUnit(row), input_price_per_m: input,
     output_price_per_m: read("output_price_per_m"), cache_read_price_per_m: cacheRead > 0 ? cacheRead : input,
     cache_write_price_per_m: cacheWrite > 0 ? cacheWrite : input, price_per_call: read("price_per_call"),
-    search_price_per_call: read("search_price_per_call"), multiplier };
+    search_price_per_call: read("search_price_per_call"), multiplier, ...(model_type === "video" ? { model_type } : {}),
+    ...(video_pricing ? { video_pricing } : {}) };
 }
 function policySnapshot(policy: TokenRoutingPolicy): TokenRoutingPolicy {
   return { mode: policy.mode, group_ids: [...policy.group_ids], selection: policy.selection,
@@ -68,7 +74,7 @@ function policySnapshot(policy: TokenRoutingPolicy): TokenRoutingPolicy {
     model_scope: policy.model_scope === null ? null : [...policy.model_scope] };
 }
 
-export async function previewTokenRouting(env: Env, device: DeviceRow, tokenId: string, modelKey: string): Promise<TokenRoutingPreview> {
+export async function previewTokenRouting(env: Env, device: DeviceRow, tokenId: string, modelKey: string, options: { strict?: boolean } = {}): Promise<TokenRoutingPreview> {
   const checked_at = Date.now();
   const result: TokenRoutingPreview = { available: false, model: modelKey, public_name: null, identity: null,
     source: null, version: null, effective_policy: null, routes: [], legacy_fallback: false, explanation: "",
@@ -89,7 +95,7 @@ export async function previewTokenRouting(env: Env, device: DeviceRow, tokenId: 
           resolveRowPricingMode(route.billingRow) === "priced" && resolveRowPeakPricing(route.billingRow), checked_at);
         return { order: index + 1, service_group: { id: route.group.id, name: route.group.name },
           public_name: route.mapping.model_key, identity: identity ? "public:" + identity : route.targetKind + ":" + route.quotaId,
-          price: publicPrice(route.billingRow, snapshot.multiplier) };
+          price: publicPrice(route.billingRow, snapshot.multiplier, route.group.multiplier, route.mapping.pricing_json != null) };
       }));
       result.routes = routes; result.public_name = routes[0].public_name; result.identity = routes[0].identity;
       result.available = true;
@@ -136,6 +142,7 @@ export async function previewTokenRouting(env: Env, device: DeviceRow, tokenId: 
     result.explanation += "这里只显示参考报价，不承诺实际调用价格；真实请求仍重查权限、协议、能力及价格，并按实际调用结算。";
     return result;
   } catch (error) {
+    if (options.strict && !(error instanceof HTTPException)) throw error;
     const status = error instanceof HTTPException ? error.status : 503;
     result.error = status === 403 ? "model_not_in_scope" : status === 404 ? "model_not_found" : status === 400 ? "routing_conflict" : "routing_unavailable";
     result.explanation = status === 403 ? "账户权限或令牌模型范围不允许此调用。" : status === 404 ? "所选路由中找不到该调用名。" : status === 400 ? "报价类型或计费单位冲突，无法解析。" : "路由、目标或报价配置不可用；不会把异常当作无报价而回退旧版。";

@@ -73,29 +73,32 @@ interface TaskRow {
 }
 const statuses = ["review", "all", "submitting", "submission_unknown", "pending", "succeeded", "failed"];
 export default function AdminVideoTasks() {
-  const [defaults] = useState(() => ({ task_status: "review", task_device_id: "", task_task_id: "", ...recordTimeDefaults("task_") }));
+  const [defaults] = useState(() => ({ task_status: "review", task_device_id: "", task_task_id: "", task_attention_before: "", ...recordTimeDefaults("task_") }));
   const [filters, setFilter, resetFilters] = useAdminFilters(defaults);
   const [draft, setDraft] = useState(filters);
   const filterKey = JSON.stringify(filters);
   useEffect(() => setDraft(JSON.parse(filterKey)), [filterKey]);
   let query = "", invalid = "";
+  const attentionBefore = filters.task_attention_before;
+  const attentionMode = !!attentionBefore;
   try {
     if (!statuses.includes(filters.task_status) || [filters.task_device_id, filters.task_task_id].some(value => /[\x00-\x20\x7f]/.test(value)))
       throw new Error("任务筛选值无效");
-    query = recordQuery(filters, "task_", ["status", "device_id", "task_id"]);
+    query = attentionMode ? new URLSearchParams({ list_task_attention_before: attentionBefore }).toString() : recordQuery(filters, "task_", ["status", "device_id", "task_id"]);
   } catch (err) { invalid = (err as Error).message; }
   const page = useAdminRecordPage<TaskRow>("/api/video-tasks", query, invalid);
   return <Card title="任务列表">
-    <p className="text-xs text-slate-500 mb-3">默认显示最近 30 天内待核对的任务。</p>
+    <p className="text-xs text-slate-500 mb-3">{attentionMode ? "超时待核对：仅显示至少 30 分钟未完成的 pending / submission_unknown 任务。" : "默认显示最近 30 天内待核对的任务。"}</p>
+    {attentionMode && <Button type="button" variant="outline" onClick={() => resetFilters()}>退出超时待核对模式</Button>}
     <form className="grid gap-2 sm:grid-cols-3" onSubmit={event => {
       event.preventDefault();
       for (const key of Object.keys(defaults)) setFilter(key, draft[key]);
       if (Object.keys(defaults).every(key => filters[key] === draft[key])) void page.refresh();
     }}>
-      <label>状态<Select aria-label="任务状态" value={draft.task_status} onChange={e => setDraft({ ...draft, task_status: e.target.value })}>
+      <label>状态<Select aria-label="任务状态" disabled={attentionMode} value={attentionMode ? "review" : draft.task_status} onChange={e => setDraft({ ...draft, task_status: e.target.value })}>
         {statuses.map(status => <option key={status} value={status}>{status === "review" ? "待复核 (pending / submission_unknown)" : status}</option>)}
       </Select></label>
-      {[["device_id", "账户 ID"], ["task_id", "任务 ID"], ["from", "任务开始时间"], ["to", "任务结束时间"]].map(([field, label]) => <label key={field}>{label}
+      {!attentionMode && [["device_id", "账户 ID"], ["task_id", "任务 ID"], ["from", "任务开始时间"], ["to", "任务结束时间"]].map(([field, label]) => <label key={field}>{label}
         <Input aria-label={label} type={field === "from" || field === "to" ? "datetime-local" : "text"} maxLength={256}
           value={draft["task_" + field]} onChange={e => setDraft({ ...draft, ["task_" + field]: e.target.value })} />
       </label>)}

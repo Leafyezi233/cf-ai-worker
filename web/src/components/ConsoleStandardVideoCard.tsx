@@ -32,7 +32,7 @@ export function StandardVideoTaskCard({task, token, onRefresh, disabled=false}: 
     <p className="break-all text-xs text-slate-500">任务编号：<strong className="font-mono font-normal">{task.id}</strong></p>
     <dl className="grid grid-cols-2 gap-3 sm:grid-cols-4"><div><dt className="text-xs text-slate-500">模型</dt><dd className="break-all font-medium">{task.model}</dd></div><div><dt className="text-xs text-slate-500">时长</dt><dd>{task.duration} 秒</dd></div><div><dt className="text-xs text-slate-500">画面比例</dt><dd>{task.ratio}</dd></div><div><dt className="text-xs text-slate-500">分辨率</dt><dd>{task.resolution}</dd></div></dl>
     {task.cost!==undefined?<p className="font-medium">已结算 ¥{task.cost.toFixed(4)}</p>:null}
-    {task.status==="completed"&&!path?<p className="rounded border border-amber-200 bg-amber-50 p-3 leading-relaxed text-amber-900">生成完成，下载未配置，请联系管理员获取帮助；无需重新生成。</p>:null}
+    {task.status==="completed"&&!path?<p className="rounded border border-amber-200 bg-amber-50 p-3 leading-relaxed text-amber-900">生成完成，下载未配置，请联系管理员获取帮助；无需重新生成，请勿重复付费提交。</p>:null}
     {task.requires_review?<p className="rounded border border-amber-200 bg-amber-50 p-3 font-medium text-amber-900">需要人工复核；禁止重新付费提交。</p>:null}
     <Button disabled={disabled} onClick={onRefresh} variant="secondary">手动查询任务</Button>
     {task.status==="completed"&&path?<Button disabled={disabled} onClick={()=>void open()}>播放 / 下载（不重新生成）</Button>:null}
@@ -103,7 +103,7 @@ export function ConsoleStandardVideoCard({models, token="", active=false, limits
   if(!items.length)return null;
   if(token!==scope.current)return <section hidden={!active}><Card title="标准视频生成">正在切换设备身份与私有提交记录…</Card></section>;
   return <section hidden={!active}><Card title="标准视频生成"><div className="space-y-3">
-    <div className="rounded-lg border p-3 text-sm leading-relaxed"><p className="font-medium">先选模型与规格，再提交生成</p><p className="text-slate-500">价格由管理员设置。</p><details className="mt-2"><summary className="cursor-pointer font-medium">查看计费与报价说明</summary><ul className="mt-2 list-disc space-y-1 pl-5"><li>¥/秒：单价乘以生成秒数。</li><li>¥/次：按一次成功任务计费。</li><li></li></ul></details></div>
+    <div className="rounded-lg border p-3 text-sm leading-relaxed"><p className="font-medium">先选模型与规格，再提交生成</p><p className="text-slate-500">价格由管理员设置，未定价不等于免费。</p><details className="mt-2"><summary className="cursor-pointer font-medium">查看计费与报价说明</summary><ul className="mt-2 list-disc space-y-1 pl-5"><li>¥/秒：单价乘以生成秒数。</li><li>¥/次：按一次成功任务计费。</li><li>未定价的规格不可提交；仅成功任务结算。</li></ul></details></div>
     <fieldset disabled={unavailable||locked} className="space-y-3">
       <legend className="mb-2 font-semibold">1. 描述视频</legend>
       <label>模型<Select value={selected?.model_name||""} onChange={e=>{operation.current?.abort();operation.current=null;generation.current++;setBusy(false);setModel(e.target.value);setRatio("");setResolution("");setDuration("");setPrompt("");setAudio("");setImageUrls("");setVideoUrls("");setMode("text");setRefs([]);setError("");setUploadError(false);}}><option value="" disabled>选择模型</option>{items.map(m=><option key={m.id} value={m.model_name}>{m.display_name||m.model_name}</option>)}</Select></label>
@@ -122,7 +122,7 @@ export function ConsoleStandardVideoCard({models, token="", active=false, limits
     {refs.map(r=><p key={r.asset.id}>{r.name} · {r.kind==="videos"?"参考视频":r.role==="first"?"首帧":r.role==="last"?"尾帧":"参考图片"} · {r.asset.bytes} 字节 <Button disabled={unavailable||locked} variant="ghost" onClick={()=>void remove(r)}>删除</Button></p>)}
     {uploadError?<p>上传失败已阻止生成。请手动重新上传或删除失败前的素材；不会自动生成。</p>:null}
     <h3 className="border-t pt-3 font-semibold">4. 提交与查询</h3>
-    <p className="text-sm leading-relaxed text-slate-500">查询与刷新不会重复生成视频。</p>
+    <p className="text-sm leading-relaxed text-slate-500">查询与刷新不会生成新视频。</p>
     <Button disabled={unavailable||locked||uploadError||!selected} onClick={()=>void submit()}>创建视频（按所选规格报价）</Button>
     <Button disabled={unavailable} variant="secondary" onClick={()=>void refresh()}>手动刷新任务列表（不生成）</Button>
     {attempt?<div className="rounded-lg border p-3 space-y-3 text-sm leading-relaxed"><h3 className="font-semibold">当前提交记录</h3><p>原始参数已冻结；请先确认当前任务结果，不要重复付费提交。</p><details><summary className="cursor-pointer font-medium">查看提交标识（技术详情）</summary><p className="mt-2 break-all font-mono">持久提交 Key：{attempt.key}。原始参数已冻结。</p></details>{attempt.conflict||attempt.task?.requires_review?<p className="font-medium text-amber-800">需管理员人工复核，不可换 key 重新提交。</p>:attempt.rejected===true?<p>网关已明确拒绝且尚未派发；可结束此记录后修改参数，未知结果不得清除。</p>:!attempt.task?<><p className="font-semibold text-amber-800">提交确认未知，请勿创建新提交。</p><p>仅可主动用原 key + 原参数查询式重发；不会自动付费重试。</p><Button disabled={unavailable} variant="warning" onClick={()=>void submit(true)}>手动重发原提交（同 Key / 参数）</Button></>:null}{standardAttemptFinished(attempt)?<Button disabled={unavailable} onClick={()=>void newIntent()}>结束此记录，开始新的付费意图</Button>:null}</div>:null}

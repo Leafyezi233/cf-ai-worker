@@ -20,7 +20,7 @@ async function setup() {
 }
 
 async function access(env: ReturnType<typeof makeEnv>, id: string) {
-  const res = await devicesApp.request("http://local/" + id + "/access", {}, env);
+  const res = await devicesApp.request("http://local/" + id + "/access?models=1", {}, env);
   return { status: res.status, body: await res.json() as any };
 }
 
@@ -37,7 +37,8 @@ describe("admin account access report", () => {
     expect(byName["free-chat"]).toMatchObject({ available: true, price: { pricing_mode: "free" } });
     expect(byName["draft-chat"]).toMatchObject({ available: false, price: null });
     expect(byName["draft-chat"].reason).toContain("未定价");
-    expect(body.models[body.models.length - 1].name).toBe("draft-chat");
+    // Keyset pagination keeps catalog order instead of sorting available names ahead of denied ones.
+    expect(body.models.map((m: any) => m.name)).toEqual(["cheap-chat", "draft-chat", "free-chat"]);
     expect(JSON.stringify(body)).not.toMatch(/token_hash|password_hash|sk-a/);
   });
 

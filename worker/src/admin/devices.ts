@@ -299,9 +299,17 @@ devicesApp.post("/:id/topup", zValidator("json", TopupSchema), async (c) => {
 });
 
 devicesApp.get("/:id/access", async (c) => {
-  const report = await deviceAccessReport(c.env, c.req.param("id"));
-  if (!report) return c.json({ error: "not_found" }, 404);
-  return c.json(report);
+  const cursor = c.req.query("cursor") || "", model = c.req.query("model");
+  if (cursor.length > 300 || (model !== undefined && (!model.trim() || model.length > 300))) return c.json({ error: "invalid_model_cursor" }, 400);
+  try {
+    const report = await deviceAccessReport(c.env, c.req.param("id"), {
+      models: c.req.query("models") === "1", cursor, model, limit: Number(c.req.query("limit")) || 5,
+    });
+    if (!report) return c.json({ error: "not_found" }, 404);
+    return c.json(report);
+  } catch {
+    return c.json({ error: "access_diagnostic_failed", message: "账户诊断失败，请重试；不能据此判断模型不可用。" }, 503);
+  }
 });
 
 devicesApp.get("/:id/ledger", async (c) => {

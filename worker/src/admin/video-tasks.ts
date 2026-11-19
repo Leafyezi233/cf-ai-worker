@@ -70,6 +70,10 @@ function reviewView(t: Awaited<ReturnType<typeof getVideoTask>>) {
     poll_after:t.poll_after,poll_attempts:t.poll_attempts || 0,created_at:t.created_at,updated_at:t.updated_at};
 }
 function taskListConditions(query: Record<string, string>, exporting: boolean) {
+  const attentionKey = query.attention_before !== undefined ? "attention_before" : "list_task_attention_before";
+  const attentionRaw = query[attentionKey];
+  const attention = attentionRaw !== undefined;
+  if (attention && (query.status !== undefined && query.status !== "review" || query.from !== undefined || query.to !== undefined || query.attention_before !== undefined && query.list_task_attention_before !== undefined || !/^\d+$/.test(attentionRaw) || !Number.isSafeInteger(Number(attentionRaw)) || Number(attentionRaw) < 0 || Number(attentionRaw) > 8640000000000000)) throw new Error("invalid_video_task_filters");
   const integer = (key: string, fallback: number, max: number) => {
     if (query[key] === undefined) return fallback;
     if (!/^\d+$/.test(query[key]) || !Number.isSafeInteger(Number(query[key])) || Number(query[key]) > max)
@@ -78,18 +82,19 @@ function taskListConditions(query: Record<string, string>, exporting: boolean) {
   };
   const limit = integer("limit", exporting ? 500 : 100, exporting ? 1000 : 200);
   if (limit < 1) throw new Error("invalid_video_task_filters");
-  const from = integer("from", 0, 8640000000000000);
-  const to = integer("to", 8640000000000000, 8640000000000000);
+  const from = attention ? 0 : integer("from", 0, 8640000000000000);
+  const to = attention ? Number(attentionRaw) : integer("to", 8640000000000000, 8640000000000000);
   if (from > to) throw new Error("invalid_video_task_filters");
-  if ((query.from !== undefined || query.to !== undefined) &&
+  if (attention && to > Date.now() - 30 * 60 * 1000) throw new Error("invalid_video_task_filters");
+  if (!attention && (query.from !== undefined || query.to !== undefined) &&
       (query.from === undefined || query.to === undefined || to - from > 31 * 86400000))
     throw new Error("invalid_video_task_filters");
-  const status = query.status || "review";
+  const status = attention ? "review" : query.status || "review";
   if (!["review", "all", "submitting", "submission_unknown", "pending", "succeeded", "failed"].includes(status))
     throw new Error("invalid_video_task_filters");
-  const conditions = ["created_at >= ?", "created_at <= ?"];
+  const conditions = ["created_at >= ?", attention ? "created_at < ?" : "created_at <= ?"];
   const binds: (string | number)[] = [from, to];
-  if (status === "review") conditions.push("status IN ('submission_unknown','pending')");
+  if (attention || status === "review") conditions.push("status IN ('submission_unknown','pending')");
   else if (status !== "all") { conditions.push("status = ?"); binds.push(status); }
   for (const [key, column] of [["device_id", "device_id"], ["task_id", "id"]] as const) {
     const value = query[key];
@@ -97,7 +102,7 @@ function taskListConditions(query: Record<string, string>, exporting: boolean) {
     if (value.length > 256 || /[\x00-\x20\x7f]/.test(value)) throw new Error("invalid_video_task_filters");
     conditions.push(column + " = ?"); binds.push(value);
   }
-  const signature = JSON.stringify([status, from, to, query.device_id || "", query.task_id || ""]);
+  const signature = JSON.stringify([...(attention ? ["attention"] : []), status, from, to, query.device_id || "", query.task_id || ""]);
   if (query.cursor) {
     try {
       if (query.cursor.length > 4096) throw new Error();
@@ -109,13 +114,13 @@ function taskListConditions(query: Record<string, string>, exporting: boolean) {
       conditions.push("(created_at, id) > (?, ?)"); binds.push(cursor[0], cursor[1]);
     } catch { throw new Error("invalid_video_task_filters"); }
   }
-  return { limit, signature, status, taskId: query.task_id, deviceId: query.device_id, where: "WHERE " + conditions.join(" AND "), binds };
+  return { limit, signature, status, attention, taskId: query.task_id, deviceId: query.device_id, where: "WHERE " + conditions.join(" AND "), binds };
 }
 async function readTaskPage(env: Env, filters: ReturnType<typeof taskListConditions>) {
   await ensureSchema(env);
   let where = filters.where;
   let binds = [...filters.binds];
-  if (filters.status === "review" && !filters.taskId && !filters.deviceId) {
+  if ((filters.status === "review" || filters.attention) && !filters.taskId && !filters.deviceId) {
     const branch = (status: "pending" | "submission_unknown") =>
       "SELECT id FROM (SELECT id, created_at FROM video_tasks " +
       filters.where.replace("status IN ('submission_unknown','pending')", "status = '" + status + "'") +

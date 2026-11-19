@@ -140,7 +140,17 @@ function QuickStart({ onOpen }: { onOpen: (section: ConsoleSection) => void }) {
   );
 }
 
-function BalanceChip({ quota, onOpen }: { quota: ConsoleQuota | undefined; onOpen: () => void }) {
+type AccountBalance = Omit<ConsoleQuota, "rpm">;
+
+export function accountBalance(me: ConsoleMe["device"] | undefined): AccountBalance | undefined {
+  if (!me) return undefined;
+  const limit = me.cost_limit_monthly ?? 0;
+  return { balance_usd: me.balance_usd, reserved_usd: me.reserved_usd, available_usd: me.available_usd,
+    low_balance_warning: me.low_balance_warning, monthly_cost_usd: me.current_month_cost,
+    monthly_cost_limit_usd: limit, monthly_cost_exceeded: limit > 0 && me.current_month_cost >= limit };
+}
+
+function BalanceChip({ quota, onOpen }: { quota: AccountBalance | undefined; onOpen: () => void }) {
   if (!quota) return null;
   const danger = quota.available_usd < 0;
   const warn = !danger && quota.low_balance_warning;
@@ -213,13 +223,13 @@ export default function ConsolePage() {
 
   const authenticated = Boolean(token && sessionQuery.data?.authenticated);
   const needsModels = tab === "guide" || tab === "video";
+  const needsQuota = tab === "overview" || tab === "usage";
   const meQuery = useQuery<ConsoleMe>(token ? `console:${scope}:me` : null, () => fetcher("/console/me"), {
     enabled: Boolean(token),
   });
-  // Balance and account limits are shown on every page (header chip + account alerts), so quota
-  // is read whenever the session is authenticated; it is small and cached for 15 seconds.
+  // Other sections reuse /me for their balance chip and alerts; only account/usage details need quota.
   const quotaQuery = useQuery<ConsoleQuota>(token ? `console:${scope}:quota` : null, () => fetcher("/console/quota"), {
-    enabled: authenticated,
+    enabled: authenticated && needsQuota,
     ttlMs: 15_000,
   });
   const usageQuery = useQuery<ConsoleUsage>(
@@ -317,7 +327,8 @@ export default function ConsolePage() {
     setToken("");
   };
   const refreshAll = () => {
-    const requests: Promise<unknown>[] = [meQuery.refresh(true), quotaQuery.refresh(true)];
+    const requests: Promise<unknown>[] = [meQuery.refresh(true)];
+    if (needsQuota) requests.push(quotaQuery.refresh(true));
     if (tab === "usage") requests.push(usageQuery.refresh(true));
     if (needsModels) requests.push(modelsQuery.refresh(true));
     if (tab === "models") requests.push(marketplaceQuery.refresh(true));
@@ -325,7 +336,7 @@ export default function ConsolePage() {
     void Promise.allSettled(requests);
   };
   const me = meQuery.data?.device;
-  const quota = quotaQuery.data;
+  const quota: AccountBalance | undefined = needsQuota ? quotaQuery.data : accountBalance(me);
   const usage = usageQuery.data;
   const models = modelsQuery.data;
   const rangeLabel = RANGES.find(r => r.key === range)?.label;
@@ -434,7 +445,7 @@ export default function ConsolePage() {
             <section aria-labelledby="console-balance-heading" className="space-y-3">
               <div>
                 <h3 id="console-balance-heading" className="font-semibold text-slate-900 dark:text-slate-100">余额与额度</h3>
-                <p className="mt-1 text-sm leading-6 text-slate-500 dark:text-slate-400">月卡额度与钱包余额分开计算。</p>
+                <p className="mt-1 text-sm leading-6 text-slate-500 dark:text-slate-400">月卡额度与钱包余额分开计算，用量花费不等同于钱包扣款。</p>
               </div>
               {quotaQuery.error ? <p role="alert" className="text-sm text-rose-600 dark:text-rose-400">余额读取失败，请点击“刷新数据”重试。</p> : null}
               <div className="grid gap-3 md:grid-cols-3">
@@ -466,7 +477,7 @@ export default function ConsolePage() {
                       : "text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800")}>{r.label}</button>)}
                 </div>
               </div>
-              {usageQuery.error ? <p role="alert" className="text-sm text-rose-600 dark:text-rose-400">用量读取失败，请刷新重试。</p> : null}
+              {usageQuery.error ? <p role="alert" className="text-sm text-rose-600 dark:text-rose-400">用量读取失败，请刷新重试；无法读取不代表没有调用记录。</p> : null}
               {(usage?.summary?.pricing_missing_count || 0) > 0 ? (
                 <Notice tone="warning">有 {usage?.summary?.pricing_missing_count} 条记录缺少价格配置，其花费按 0 计入，统计偏低。</Notice>
               ) : null}
