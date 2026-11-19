@@ -111,7 +111,7 @@ describe("video SSR rendering", () => {
     const invalid = render(VideoTaskCard, { task: task({ status: "succeeded", result_url: "javascript:alert(1)" }) });
     expect(invalid).not.toContain("href=");
     const unknown = render(VideoTaskCard, { task: task({ status: "submission_unknown" }) });
-    expect(unknown).toContain("不可重新付费提交");
+    expect(unknown).toContain("不要重复提交");
     expect(unknown).not.toContain("创建视频任务");
   });
   it("keeps video distinct and explains missing public specs without private adapter metadata", () => {
@@ -120,8 +120,8 @@ describe("video SSR rendering", () => {
     const html = render(ConsoleVideoCard, { active: true, models: { items: [video, chat] } });
     expect(html).toContain(input.model);
     expect(html).not.toContain("chat-only");
-    expect(html).toContain("目录未提供可用视频规格");
-    expect(html).toContain("管理员配置的显式允许列表");
+    expect(html).toContain("该模型未声明可用规格");
+    expect(html).toContain("管理员允许的时长和分辨率");
     expect(html).not.toContain("task_id_path");
     expect(render(ConsoleVideoCard, { models: null })).toContain("hidden=");
   });
@@ -304,7 +304,6 @@ describe("video existing-web filters and SSR", () => {
     expect(source()).toContain("saveVideoAttempt(token, next,sessionStorage)");
     expect(source()).toContain("?.video");
     expect(code.indexOf("<ConsoleVideoCard")).toBeLessThan(code.indexOf('{tab === "guide" ? ('));
-    expect(code).toContain(') : tab === "video" || tab === "keys" || tab === "security" ? null : (');
     expect(code).not.toContain('key={tab}');
   });
 });

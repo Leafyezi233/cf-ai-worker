@@ -169,7 +169,7 @@ describe("upload and explicit content-ticket requests", () => {
     expect(html).not.toContain('<video'); expect(html).not.toContain('href=');
     expect(fetcher).not.toHaveBeenCalled();
     const upstream = render(VideoTaskCard, { task: { ...task, result_url: "https://secret.invalid/video.mp4" } });
-    expect(upstream).not.toContain("https://secret.invalid"); expect(upstream).toContain("禁止上游 URL 回退");
+    expect(upstream).not.toContain("https://secret.invalid"); expect(upstream).toContain("结果链接无效");
     const code = source(cardPath);
     expect(code).toContain('controls preload="none"'); expect(code).not.toContain("autoPlay"); expect(code).not.toContain(".play()"); expect(code).not.toContain(".click()");
     expect(code).toContain('onClick={() => void openMedia("play")}');

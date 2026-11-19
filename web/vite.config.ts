@@ -21,7 +21,7 @@ export default defineConfig({
       "/console": {
         target: "http://127.0.0.1:8787",
         bypass(req) {
-          if (req.headers.accept?.includes("text/html") && /^\/console\/?$/.test(req.url || "")) return req.url;
+          if (req.headers.accept?.includes("text/html") && /^\/console\/?(?:\?.*)?$/.test(req.url || "")) return req.url;
         },
       },
     },

@@ -1,5 +1,5 @@
-import { useMemo, useRef, useState } from "react";
-import { Button, Card, Empty, Select, Spinner, Textarea } from "./ui";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Button, Card, Empty, Select, Textarea } from "./ui";
 import { isTextModel } from "../utils/modelType";
 import { streamConsoleChat, type ConsoleModels } from "../api/consoleClient";
 
@@ -16,6 +16,19 @@ interface ChatMessage {
   content: string;
 }
 
+function Bubble({ role, children, pending = false }: { role: ChatMessage["role"]; children: string; pending?: boolean }) {
+  const mine = role === "user";
+  return <div className={"flex " + (mine ? "justify-end" : "justify-start")}>
+    <div className={"max-w-[85%] whitespace-pre-wrap break-words rounded-2xl px-3.5 py-2 text-sm leading-6 " + (mine
+      ? "rounded-br-sm bg-blue-600 text-white"
+      : "rounded-bl-sm bg-white text-slate-800 ring-1 ring-slate-200 dark:bg-slate-800 dark:text-slate-100 dark:ring-slate-700")}>
+      <span className="sr-only">{mine ? "你：" : "模型："}</span>
+      {children || (pending ? "…" : "")}
+      {pending && children ? <span aria-hidden="true" className="ml-0.5 inline-block h-4 w-1.5 animate-pulse bg-current align-text-bottom opacity-60" /> : null}
+    </div>
+  </div>;
+}
+
 export function ConsoleChatCard({ models }: { models: ConsoleModels | null }) {
   const items = useMemo(
     () => (models?.items || []).filter((m) => isTextModel(m) && m.billing_unit !== "call"),
@@ -29,6 +42,7 @@ export function ConsoleChatCard({ models }: { models: ConsoleModels | null }) {
   const [draft, setDraft] = useState("");
   const [error, setError] = useState("");
   const abortRef = useRef<AbortController | null>(null);
+  const scrollRef = useRef<HTMLDivElement | null>(null);
 
   const selected = items.find((m) => m.model_name === modelName) || items[0];
   const activeModel = modelName || selected?.model_name || "";
@@ -37,13 +51,20 @@ export function ConsoleChatCard({ models }: { models: ConsoleModels | null }) {
       ? selected.supported_reasoning_levels
       : EFFORT_LEVELS;
 
+  useEffect(() => {
+    const box = scrollRef.current;
+    if (box) box.scrollTop = box.scrollHeight;
+  }, [messages, draft]);
+
+  useEffect(() => () => abortRef.current?.abort(), []);
+
   async function send() {
     const text = input.trim();
     if (!text || !selected || streaming) return;
     setError("");
     setInput("");
     const history: ChatMessage[] = [...messages, { role: "user", content: text }];
-    setMessages([...history, { role: "assistant", content: "" }]);
+    setMessages(history);
     setDraft("");
     setStreaming(true);
     const controller = new AbortController();
@@ -69,11 +90,7 @@ export function ConsoleChatCard({ models }: { models: ConsoleModels | null }) {
     } finally {
       setStreaming(false);
       abortRef.current = null;
-      if (answer) {
-        setMessages([...history, { role: "assistant", content: answer }]);
-      } else {
-        setMessages(history);
-      }
+      setMessages(answer ? [...history, { role: "assistant", content: answer }] : history);
       setDraft("");
     }
   }
@@ -90,28 +107,32 @@ export function ConsoleChatCard({ models }: { models: ConsoleModels | null }) {
 
   if (!items.length) {
     return (
-      <Card title="试一句">
+      <Card title="在线试一句">
         <Empty text="当前没有可用于对话的模型" />
       </Card>
     );
   }
 
-  const transcript = messages.map((m) => m.role + ": " + m.content).join("\n\n");
+  const empty = messages.length === 0 && !streaming;
 
   return (
     <Card
-      title="试一句"
+      title="在线试一句"
       action={
-        <Button size="sm" variant="ghost" onClick={reset} disabled={streaming}>
-          清空
+        <Button size="sm" variant="ghost" onClick={reset} disabled={streaming || messages.length === 0}>
+          清空对话
         </Button>
       }
     >
       <div className="space-y-3">
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+        <p className="text-xs leading-5 text-slate-500 dark:text-slate-400">
+          不写代码，先确认模型能正常回复。这里使用当前登录账户发起真实调用，会按实际用量计费，并记录在“用量与账单”中。
+        </p>
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
           <Select
             aria-label="模型"
             value={activeModel}
+            disabled={streaming}
             onChange={(e) => {
               setModelName(e.target.value);
               setEffort("");
@@ -126,7 +147,7 @@ export function ConsoleChatCard({ models }: { models: ConsoleModels | null }) {
           <Select
             aria-label="推理等级"
             value={effort}
-            disabled={!selected?.supports_reasoning}
+            disabled={streaming || !selected?.supports_reasoning}
             onChange={(e) => setEffort(e.target.value)}
           >
             <option value="">
@@ -145,36 +166,36 @@ export function ConsoleChatCard({ models }: { models: ConsoleModels | null }) {
           </Select>
         </div>
 
-        {transcript || draft ? (
-          <pre className="max-h-72 overflow-auto whitespace-pre-wrap break-words rounded-lg bg-slate-50 dark:bg-slate-950/60 border border-slate-100 dark:border-slate-800 p-3 text-xs text-slate-700 dark:text-slate-300">
-            {transcript}
-            {transcript ? "\n\n" : ""}
-            {draft ? "assistant: " + draft : ""}
-          </pre>
-        ) : null}
+        <div ref={scrollRef} aria-live="polite" className="max-h-80 min-h-[7rem] space-y-2 overflow-y-auto rounded-lg border border-slate-100 bg-slate-50 p-3 dark:border-slate-800 dark:bg-slate-950/60">
+          {empty ? <div className="flex h-[5rem] items-center justify-center text-xs text-slate-400 dark:text-slate-500">发送一句话，例如“你好，介绍一下你自己”</div> : null}
+          {messages.map((m, i) => <Bubble key={i} role={m.role}>{m.content}</Bubble>)}
+          {streaming ? <Bubble role="assistant" pending>{draft}</Bubble> : null}
+        </div>
 
         {error ? (
-          <div className="text-xs text-rose-600 dark:text-rose-400">{error}</div>
+          <div role="alert" className="rounded-lg bg-rose-50 px-3 py-2 text-xs text-rose-600 dark:bg-rose-950/30 dark:text-rose-400">{error}</div>
         ) : null}
 
-        <Textarea
-          rows={3}
-          value={input}
-          placeholder="说点什么，回车换行，点击发送"
-          onChange={(e) => setInput(e.target.value)}
-          disabled={streaming}
-        />
-        <div className="flex items-center gap-2">
-          <Button onClick={send} disabled={streaming || !input.trim()}>
-            {streaming ? "生成中…" : "发送"}
-          </Button>
-          {streaming ? (
-            <Button variant="ghost" onClick={stop}>
-              停止
+        <form className="space-y-2" onSubmit={(e) => { e.preventDefault(); void send(); }}>
+          <Textarea
+            aria-label="输入消息"
+            rows={2}
+            value={input}
+            placeholder="输入消息；Ctrl / ⌘ + Enter 发送，Enter 换行"
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); void send(); }
+            }}
+            disabled={streaming}
+            className="!font-sans"
+          />
+          <div className="flex items-center justify-end gap-2">
+            {streaming ? <Button type="button" variant="outline" onClick={stop}>停止生成</Button> : null}
+            <Button type="submit" disabled={streaming || !input.trim()}>
+              {streaming ? "生成中…" : "发送"}
             </Button>
-          ) : null}
-          {streaming ? <Spinner text=" " /> : null}
-        </div>
+          </div>
+        </form>
       </div>
     </Card>
   );

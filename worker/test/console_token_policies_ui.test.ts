@@ -38,7 +38,7 @@ describe("ConsoleTokenPolicies SSR and pure request helpers (not browser E2E)", 
     expect(html).toContain('aria-label="策略编辑对象"'); expect(html).toContain('<option value="" selected="">请选择编辑对象…</option>');
     expect(html).toContain('value="master"'); expect(html).toContain('value="live"'); expect(html).not.toContain('value="dead"');
     expect(html).toContain("选择后将在下方展开该对象的设置。");
-    expect(html).not.toContain("策略来源"); expect(html).toContain("只读路由解析预览");
+    expect(html).not.toContain("策略来源"); expect(html).toContain("路由预览");
     expect(html).toContain('aria-label="路由预览对象"');
     expect(html).toContain("请选择预览对象…");
     expect(html).not.toContain('aria-label="预览公开调用名"');
@@ -105,7 +105,7 @@ describe("ConsoleTokenPolicies SSR and pure request helpers (not browser E2E)", 
     const legacyHtml = renderToStaticMarkup(createElement(ConsoleRoutingPreviewResult, { preview: { ...preview, legacy_fallback: true,
       routes: [{ ...preview.routes[0], service_group: null, price: { ...price, billing_unit: "call", price_per_call: 0.25 } },
         { ...preview.routes[1], service_group: null, public_name: "HIDDEN_BACKEND_ALTERNATIVE", identity: "model:PRIVATE_BACKEND_ID" }] } }));
-    expect(legacyHtml).toContain("旧版默认路由"); expect(legacyHtml).toContain("无服务报价"); expect(legacyHtml).toContain("USD 0.25/次");
+    expect(legacyHtml).toContain("旧版默认路由"); expect(legacyHtml).toContain("没有分组报价"); expect(legacyHtml).toContain("USD 0.25/次");
     expect(legacyHtml.match(/<li /g)).toHaveLength(1);
     for (const text of ["HIDDEN_BACKEND_ALTERNATIVE", "PRIVATE_BACKEND_ID", "稳定身份"]) expect(legacyHtml).not.toContain(text);
   });
@@ -113,7 +113,7 @@ describe("ConsoleTokenPolicies SSR and pure request helpers (not browser E2E)", 
     const html = renderToStaticMarkup(createElement(ConsoleRoutingPreviewResult, { preview: { available: false, model: "broken", public_name: null,
       identity: null, source: "token", version: "v4", effective_policy: policy, routes: [], legacy_fallback: false, error: "routing_unavailable",
       explanation: "坏报价不可用，不回退", notice: "不调用上游、不计费" } }));
-    expect(html).toContain("解析不可用"); expect(html).toContain("routing_unavailable"); expect(html).toContain("坏报价不可用，不回退");
-    expect(html).not.toContain("无服务报价，使用已授权");
+    expect(html).toContain("不可用"); expect(html).toContain("routing_unavailable"); expect(html).toContain("坏报价不可用，不回退");
+    expect(html).not.toContain("没有分组报价");
   });
 });

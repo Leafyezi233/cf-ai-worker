@@ -97,13 +97,13 @@ const { readFileSync } = requireWeb("node:fs");
 const React = requireWeb("react");
 const { renderToStaticMarkup } = requireWeb("react-dom/server");
 const componentPath = "../../web/src/components/ConsoleGuide.tsx";
-const { ConsoleGuide } = await import(componentPath);
+const { ConsoleDshExport } = await import(componentPath);
 function renderGuide(items: unknown[] | null, open = true) {
   function SeededGuide() {
     const dispatcher = React.__SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED.ReactCurrentDispatcher.current;
     const original = dispatcher.useState;
     dispatcher.useState = () => original(open);
-    try { return ConsoleGuide({ models: items === null ? null : { items } }); } finally { dispatcher.useState = original; }
+    try { return ConsoleDshExport({ models: items === null ? null : { items } }); } finally { dispatcher.useState = original; }
   }
   return renderToStaticMarkup(React.createElement(SeededGuide));
 }
@@ -127,7 +127,7 @@ describe("console DSH profile (SSR, not browser E2E)", () => {
     expect(html).toContain("不会设置默认推理等级");
   });
   it("reports missing list instead of exporting marketplace offers", () => {
-    expect(renderGuide(null)).toContain("当前权限模型列表未加载或加载失败");
+    expect(renderGuide(null)).toContain("模型列表加载失败");
     const page = readFileSync(new URL("../../web/src/pages/ConsolePage.tsx", import.meta.url), "utf8");
     expect(page).toContain("<ConsoleGuide models={modelsQuery.data}");
     expect(page).toContain('fetcher("/console/models")');

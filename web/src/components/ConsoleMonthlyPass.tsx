@@ -75,14 +75,17 @@ function ScopedMonthlyPass({ scope, onChange }: { scope: string; onChange?: () =
     if (!mounted.current) return;
     query.mutate(result); onChange?.();
   }
-  return <section className="space-y-4 border-t border-slate-200 pt-4 dark:border-slate-800" aria-label="月卡">
-    <div className="flex items-center justify-between gap-2"><h3 className="text-sm font-medium">月卡</h3><Button type="button" size="sm" variant="ghost" disabled={query.loading || query.isRefreshing} onClick={() => { void query.refresh().catch(() => {}); }}>刷新</Button></div>
-    <MonthlyPassRules />
+  return <section className="space-y-4 rounded-xl border border-slate-200/60 bg-white p-4 dark:border-slate-800 dark:bg-slate-900 sm:p-5" aria-label="月卡">
+    <div className="flex items-center justify-between gap-2"><h3 className="font-semibold text-slate-900 dark:text-slate-100">月卡</h3><Button type="button" size="sm" variant="ghost" disabled={query.loading || query.isRefreshing} onClick={() => { void query.refresh().catch(() => {}); }}>刷新</Button></div>
     {query.error && <p role="alert" className="text-sm text-rose-600">月卡加载失败：{query.error.message}</p>}
     {query.loading && !query.data ? <Spinner text="正在加载月卡…" /> : query.data && <>
       <MonthlyPassSummary account={query.data.item} />
       {query.data.item.subscription && <MonthlyPassWalletControl key={query.data.item.device_id} enabled={query.data.item.wallet_fallback} disabled={!!query.error || query.isRefreshing} onSave={save} />}
     </>}
+    <details className="rounded-lg bg-slate-50 px-3 py-2 dark:bg-slate-800/50">
+      <summary className="cursor-pointer text-xs font-medium text-slate-600 dark:text-slate-300">月卡规则：适用范围、重置时间与钱包兜底</summary>
+      <div className="pt-2"><MonthlyPassRules /></div>
+    </details>
   </section>;
 }
 export default function ConsoleMonthlyPass({ scope, onChange }: { scope: string; onChange?: () => void }) {

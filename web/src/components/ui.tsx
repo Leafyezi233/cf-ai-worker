@@ -239,8 +239,9 @@ export function CopyButton({
     <button
       type="button"
       onClick={handleCopy}
-      className={`inline-flex items-center gap-1 text-xs font-medium transition-colors cursor-pointer ${className}`}
+      className={`inline-flex shrink-0 items-center gap-1 whitespace-nowrap text-xs font-medium transition-colors cursor-pointer ${className}`}
       title="复制"
+      aria-label={label ? undefined : "复制"}
     >
       {copied ? <IconCheck className="text-emerald-600 dark:text-emerald-400" /> : <IconCopy />}
       {label ? <span>{copied ? "已复制" : label}</span> : null}

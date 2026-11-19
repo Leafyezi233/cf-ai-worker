@@ -65,6 +65,11 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   );
 }
 
+/** Like useTheme, but returns null instead of throwing outside a ThemeProvider (e.g. in SSR tests). */
+export function useOptionalTheme(): ThemeContextType | null {
+  return useContext(ThemeContext) ?? null;
+}
+
 export function useTheme() {
   const context = useContext(ThemeContext);
   if (!context) {

@@ -40,7 +40,7 @@ export function VideoTaskCard({ task, onRefresh, refreshing = false }: { task: V
   }, [task.id, task.result_url, task.status]);
   useEffect(() => {
     if (!ticket) return;
-    const timer = setTimeout(() => { setTicket(null); setMediaError("视频短时链接已过期，请手动重新获取；不会重新生成或重复收取创建费。"); }, Math.min(2147483647, Math.max(0, videoExpiryTime(ticket.expires_at) - Date.now())));
+    const timer = setTimeout(() => { setTicket(null); setMediaError("链接已过期，请重新获取（不会再次收费）。"); }, Math.min(2147483647, Math.max(0, videoExpiryTime(ticket.expires_at) - Date.now())));
     return () => clearTimeout(timer);
   }, [ticket]);
   async function openMedia(mode: "play" | "download") {
@@ -64,7 +64,7 @@ export function VideoTaskCard({ task, onRefresh, refreshing = false }: { task: V
     <div>{task.model} · {task.seconds} 秒 · {task.size}</div>
     <div>冻结单价 {money(task.price_per_call)}/成功任务次 · 已结算 {money(task.cost_usd)}</div>
     <div className="text-xs text-slate-500">创建：{time(task.created_at)} · 更新：{time(task.updated_at)}</div>
-    {task.status === "submission_unknown" || task.requires_review ? <p className="text-amber-700 dark:text-amber-400">提交结果未知或需要人工复核，已停止自动轮询；请联系管理员核对，可手动查询，不可重新付费提交。</p> : null}
+    {task.status === "submission_unknown" || task.requires_review ? <p className="text-amber-700 dark:text-amber-400">提交结果未知，请联系管理员核对，不要重复提交。</p> : null}
     {task.next_poll_at != null ? <p className="text-xs text-slate-500">下次可查询：{time(task.next_poll_at)}</p> : null}
     {task.error_code ? <p className="break-all text-rose-600">错误代码：{task.error_code}</p> : null}
     {task.status === "succeeded" && result ? <div className="space-y-2">
@@ -72,11 +72,11 @@ export function VideoTaskCard({ task, onRefresh, refreshing = false }: { task: V
         <Button size="sm" variant="secondary" disabled={ticketLoading} onClick={() => void openMedia("play")}>播放视频</Button>
         <Button size="sm" variant="secondary" disabled={ticketLoading} onClick={() => void openMedia("download")}>获取下载链接</Button>
       </div>
-      {ticket ? <VideoTicketMedia ticket={ticket} contentPath={result} mode={mediaMode} onError={() => { setTicket(null); setMediaError("播放链接失效或视频加载失败，请手动获取新链接；不会自动重试或重新生成。"); }} /> : null}
-      <p className="text-xs text-slate-500">仅点击时获取短时访问票据；无自动播放、下载或失败重试。重复播放/下载不会创建新视频或重复收取创建费。</p>
+      {ticket ? <VideoTicketMedia ticket={ticket} contentPath={result} mode={mediaMode} onError={() => { setTicket(null); setMediaError("视频加载失败，请重新获取链接。"); }} /> : null}
+      <p className="text-xs text-slate-500">重复播放或下载不会再次收费。</p>
     </div> : null}
     {mediaError ? <p role="alert" className="text-rose-600">{mediaError}</p> : null}
-    {task.status === "succeeded" && task.result_url && !result ? <p>结果链接无效：仅允许当前任务的同源相对内容端点，禁止上游 URL 回退。</p> : null}
+    {task.status === "succeeded" && task.result_url && !result ? <p>结果链接无效，请联系管理员。</p> : null}
   </article>;
 }
 
@@ -171,7 +171,7 @@ export function ConsoleVideoCard({ models, token = "", active = false, limitsByM
         updateReferences(referencesRef.current.map(current => current.key === item.key ? { ...current, uploaded } : current));
       }
     } catch (err) {
-      if (!controller.signal.aborted) setError((err instanceof Error ? err.message : "参考图上传失败") + "；若服务未配置 R2 图片存储会返回 503，请联系管理员。上传不会创建视频任务。");
+      if (!controller.signal.aborted) setError((err instanceof Error ? err.message : "参考图上传失败") + "；上传失败时请联系管理员确认是否已开启参考图存储。");
     } finally { referenceRequests.current.delete(controller); uploadInFlight.current = false; if (mounted.current) setUploading(false); }
   }
 
@@ -338,13 +338,13 @@ export function ConsoleVideoCard({ models, token = "", active = false, limitsByM
   return <div hidden={!active} className="space-y-4">
     <Card title="视频生成">
       <div className="space-y-3">
-        <p className="text-xs text-slate-500">仅成功任务按次计费；目录报价仅供参考，最终以任务冻结单价和结算金额为准。不自动重新提交。</p>
+        <p className="text-xs text-slate-500">只有成功的任务计费，按提交时的价格结算。</p>
         {!items.length ? <Empty text="当前没有可用的视频模型；仍可刷新已有任务" /> : <>
           <Select aria-label="视频模型" value={currentModel} disabled={!!attempt || sending || uploading} onChange={(event) => { if (attemptRef.current || createInFlight.current || uploadInFlight.current) return; clearReferences(); setModelName(event.target.value); setSize(""); setSeconds(""); }}>
             {items.map((model) => <option key={model.id} value={model.model_name}>{model.display_name || model.model_name}</option>)}
           </Select>
           {limits ? <p className="text-xs text-slate-500">管理员允许：{limits.sizes.join("、")}；{limits.seconds_min ?? 3}–{limits.seconds_max ?? 15} 秒。</p> :
-            <p className="text-xs text-amber-700 dark:text-amber-400">目录未提供可用视频规格，请填写时长和分辨率；必须符合管理员配置的显式允许列表和时长限制，以下示例不是可用规格承诺。</p>}
+            <p className="text-xs text-amber-700 dark:text-amber-400">该模型未声明可用规格，请填写管理员允许的时长和分辨率。</p>}
           <div className="grid sm:grid-cols-2 gap-2">
             <Input aria-label="视频时长（秒）" type="number" min={limits?.seconds_min ?? 3} max={limits?.seconds_max ?? 15} step="1" placeholder="时长（3–15 秒）" disabled={!!attempt || sending || uploading} value={attempt ? attempt.body.seconds : seconds} onChange={(event) => setSeconds(event.target.value)} />
             {limits ? <Select aria-label="视频分辨率" disabled={!!attempt || sending || uploading} value={attempt?.body.size ?? size} onChange={(event) => setSize(event.target.value)}>
@@ -354,7 +354,7 @@ export function ConsoleVideoCard({ models, token = "", active = false, limitsByM
           </div>
           <Textarea aria-label="视频提示词" maxLength={8000} rows={3} placeholder="描述要生成的视频" disabled={!!attempt || sending || uploading} value={attempt?.body.prompt ?? prompt} onChange={(event) => setPrompt(event.target.value)} />
           <VideoReferencePicker maxImages={maxReferenceImages} items={references} locked={!!attempt || sending} uploading={uploading} onSelect={selectReferences} onUpload={() => void uploadReferences()} onRemove={removeReference} onMove={moveReference} />
-          {attempt?.body.reference_image_ids ? <p className="text-xs break-all text-slate-500">本次锁定的参考图 ID（按顺序）：{attempt.body.reference_image_ids.join("、")}。刷新后不恢复文件或预览；失效/缺失须核对原任务，绝不自动替换 ID 或创建新 key。</p> : null}
+          {attempt?.body.reference_image_ids ? <p className="text-xs break-all text-slate-500">本次锁定的参考图 ID（按顺序）：{attempt.body.reference_image_ids.join("、")}。刷新页面后不保留文件预览。</p> : null}
           <div className="flex flex-wrap gap-2">
             <Button disabled={!active || !ready || sending || uploading || (!!attempt && !canRetryVideoAttempt(attempt))} onClick={() => void submit()}>
               {sending ? "正在提交…" : attempt && canRetryVideoAttempt(attempt) ? "使用原 key 和原参数重试未确认提交" : "创建视频任务"}
@@ -363,12 +363,12 @@ export function ConsoleVideoCard({ models, token = "", active = false, limitsByM
           </div>
         </>}
         {attempt ? <p className="text-xs break-all text-slate-500">本次幂等 Key：{attempt.key}。{attempt.taskId ? "任务已确认，仅可查询状态；未完成前不重新创建。" : "提交尚未确认，参数已锁定；同一次重试沿用此 key，不可更换参数或 key。"}</p> : null}
-        <p className="text-xs text-slate-500">本页签内暂存原参数和幂等 Key，刷新页面可恢复；关闭页签或清除浏览器数据后，请先查询任务，勿直接重发。</p>
+        <p className="text-xs text-slate-500">未确认的提交记录保存在当前标签页，刷新后可恢复。</p>
         {error ? <p role="alert" className="text-sm text-rose-600">{error}</p> : null}
       </div>
     </Card>
     <Card title="视频任务" action={<Button size="sm" variant="ghost" disabled={!active || loading} onClick={() => void refreshList()}>{loading ? "刷新中…" : "刷新任务列表"}</Button>}>
-      <p className="mb-3 text-xs text-slate-500">仅视频页激活时读取任务；可轮询任务至少间隔 15 秒，并尊重服务端退避。未知提交/人工复核不自动轮询，联系管理员核对；查询不会重新生成。最多保留 {VIDEO_TASK_HISTORY_CAP} 条，优先当前和未完成任务；更早记录请联系管理员。</p>
+      <p className="mb-3 text-xs text-slate-500">进行中的任务会自动刷新状态。最多显示 {VIDEO_TASK_HISTORY_CAP} 条，更早的记录请联系管理员。</p>
       {attempt?.taskId && !tasks.some(task => task.id === attempt.taskId) ? <Button variant="ghost" disabled={refreshingIds.has(attempt.taskId)} onClick={() => void refreshTask(attempt.taskId!)}>查询已确认任务</Button> : null}
       <div className="space-y-3">{tasks.length ? tasks.map((task) => <VideoTaskCard key={task.id} task={task} refreshing={refreshingIds.has(task.id)} onRefresh={() => void refreshTask(task.id)} />) : <Empty text="暂无视频任务" />}</div>
     </Card>

@@ -51,7 +51,7 @@ describe("independent Doubao UI contract",()=>{
  });
  it("shows completed/download unconfigured, never supplier or play button",()=>{
   const task=parseStandardVideoTask({...input,id:"local_task",status:"completed",content_available:false,result_url:"/v1/videos/local_task/content",url:"https://supplier.net/private"});
-  expect(task.result_url).toBeUndefined();const html=render(StandardVideoTaskCard,{task,token:""});expect(html).toContain("生成完成，下载未配置，请联系管理员获取帮助");expect(html).toContain("请勿重复付费提交");expect(html).not.toContain("播放 / 下载");expect(html).not.toContain("supplier");expect(standardAttemptFinished({...newStandardVideoAttempt(input,limits),task})).toBe(true);
+  expect(task.result_url).toBeUndefined();const html=render(StandardVideoTaskCard,{task,token:""});expect(html).toContain("生成完成，下载未配置，请联系管理员获取帮助");expect(html).toContain("无需重新生成");expect(html).not.toContain("播放 / 下载");expect(html).not.toContain("supplier");expect(standardAttemptFinished({...newStandardVideoAttempt(input,limits),task})).toBe(true);
  });
  it("source verifies model-switch reset and server-defined defaults (not browser E2E)",()=>{
   const source=readFileSync(new URL(componentPath,import.meta.url),"utf8");expect(source).toContain("limits?.default_duration??limits?.seconds_min");expect(source).toContain("limits?.default_ratio||limits?.ratios");expect(source).toContain('operation.current?.abort();operation.current=null;generation.current++;setBusy(false);setModel');expect(source).toContain('setImageUrls("");setVideoUrls("");setMode("text");setRefs([])');

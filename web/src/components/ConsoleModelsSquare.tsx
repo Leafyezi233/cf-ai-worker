@@ -78,13 +78,13 @@ function groupLabel(m: ModelItem) {
   return m.routing_mode === "fixed" ? "令牌固定选择：" + m.service_group_name : m.service_group_name;
 }
 function routingSummary(routing: ConsoleModelMarketplace["routing"]) {
-  if (!routing) return "路由状态暂不可用。以下报价仅供比较，不会修改 Token，也不代表实际请求一定使用最低价。";
-  if (routing.mode === "fixed") return "此 Token 固定选择「" + (routing.fixed_group_name || "指定服务组") + "」。浏览报价不会修改此设置。";
-  if (routing.mode === "legacy") return "此 Token 使用旧版默认路由，不对应单一服务分组。浏览报价不会修改路由。";
-  if (routing.mode === "multi") return "此 Token 使用多组路由；实际服务组由模型覆盖与路由策略按请求确定，没有唯一当前组。";
+  if (!routing) return "路由状态暂不可用。";
+  if (routing.mode === "fixed") return "此 Token 固定使用「" + (routing.fixed_group_name || "指定服务组") + "」分组。";
+  if (routing.mode === "legacy") return "此 Token 使用默认路由。";
+  if (routing.mode === "multi") return "此 Token 按模型使用多个分组，实际分组由路由策略决定。";
   const order = routing.selection === "input_price" ? "按输入价优先排序（按次模型按次价比较）" : routing.selection === "ordered" ? "按策略配置顺序选择候选" : "候选顺序由令牌路由策略决定";
-  const fallback = routing.failure_fallback ? "策略允许符合条件的失败切换。" : "当前策略未启用失败切换。";
-  return "此 Token 使用自动路由：" + order + "；不保证最低报价就是实际调用组。" + fallback;
+  const fallback = routing.failure_fallback ? "失败时自动切换分组。" : "";
+  return "此 Token 使用自动路由，" + order + "。" + fallback;
 }
 function money(price: number | null) {
   return price === null ? "未定价" : "¥" + price;
@@ -150,11 +150,13 @@ function ModelCard({ group, onOpen }: { group: ModelGroup; onOpen: (name: string
   const endpoints = [...new Set(endpointSets.flat())];
   const sameEndpoints = endpointSets.every(set => [...set].sort().join("|") === [...endpointSets[0]].sort().join("|"));
   const descriptions = [...new Set(group.offers.map(m => m.description || ""))];
+  const displayNames = [...new Set(group.offers.map(m => m.display_name || ""))];
+  const displayName = displayNames.length === 1 && displayNames[0] && displayNames[0] !== group.model_name ? displayNames[0] : null;
   return <div role="button" tabIndex={0} onClick={() => onOpen(group.model_name)}
     onKeyDown={e => { if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); onOpen(group.model_name); } }}
-    className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 hover:shadow-sm cursor-pointer p-4 flex flex-col gap-3">
+    className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 hover:border-blue-300 hover:shadow-sm dark:hover:border-blue-800 transition cursor-pointer p-4 flex flex-col gap-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">
     <div className="flex items-start justify-between gap-2">
-      <div className="min-w-0"><div className="font-medium break-all">{group.model_name}</div></div>
+      <div className="min-w-0"><div className="font-medium break-all">{group.model_name}</div>{displayName ? <div className="text-xs text-slate-500 dark:text-slate-400 break-words">{displayName}</div> : null}</div>
       <span onClick={e => e.stopPropagation()}><CopyButton text={group.model_name} /></span>
     </div>
     <div className="flex flex-wrap gap-1.5">
@@ -170,7 +172,7 @@ function ModelCard({ group, onOpen }: { group: ModelGroup; onOpen: (name: string
     {embedding ? <div className="text-xs text-slate-500 dark:text-slate-400">向量仅收输入 Token，不收输出费用；无响应缓存。</div> : null}
     {video ? <VideoMinimumPrices offers={group.offers.filter(isVideoModel)} /> : null}
     {group.offers.some(m=>!isVideoModel(m)&&m.billing_unit==="call") ? <MinimumPrice group={group} kind="call" label="按次" /> : null}
-    <div className="text-xs text-slate-500 dark:text-slate-400 mt-auto">{group.offers.length} 个授权组报价 · 查看各组完整价格与能力</div>
+    <div className="text-xs text-blue-600 dark:text-blue-400 mt-auto">{group.offers.length} 个授权组报价 · 查看各组完整价格与能力 →</div>
   </div>;
 }
 
@@ -236,8 +238,8 @@ export function ModelOfferCard({ m, tzOffsetMinutes }: { m: ModelItem; tzOffsetM
         </dl>
         {cacheFallback && !byCall && !embedding ? <p className="text-xs leading-relaxed text-slate-500 dark:text-slate-400">未单独配置的缓存价格按输入价计费。</p> : null}
       </> : <p className="rounded-xl bg-amber-50 p-3 text-sm text-amber-800 dark:bg-amber-950/40 dark:text-amber-300">尚未定价，不参与最低价比较。</p>}
-      {video ? <p className="text-xs text-slate-500 dark:text-slate-400">仅 succeeded 任务扣费；submitting、submission_unknown、pending 与 failed 不扣费。未知/等待状态不是失败，不应换 key 重提。视频按所选规格的每秒或每次报价，成功任务结算。无 Token、缓存或搜索附加费。</p> : null}
-      {embedding ? <p className="text-xs text-slate-500 dark:text-slate-400">向量仅收输入费用，不收输出费用；不使用响应缓存，不进入在线对话。</p> : null}
+      {video ? <p className="text-xs text-slate-500 dark:text-slate-400">只有 succeeded 的任务计费；submitting、submission_unknown、pending 和 failed 都不扣费。</p> : null}
+      {embedding ? <p className="text-xs text-slate-500 dark:text-slate-400">向量仅收输入费用，不收输出费用。</p> : null}
       <div className="flex flex-wrap items-center gap-2 text-xs">
         {!video ? <Badge tone={m.supports_reasoning ? "green" : "slate"}>{m.supports_reasoning ? "支持推理" : "不支持推理"}</Badge> : null}
         {!video && m.supports_reasoning && m.default_reasoning_level ? <span className="text-slate-500 dark:text-slate-400">默认 {m.default_reasoning_level}</span> : null}
@@ -271,11 +273,11 @@ function ModelDetail({ group, routing, tzOffsetMinutes, onClose }: { group: Mode
     <div className="space-y-4 text-sm">
       <ModelCategoryBadges offers={group.offers} all />
       <div className="rounded-md border border-slate-200 bg-slate-50 p-3 text-xs leading-relaxed text-slate-600 dark:border-slate-800 dark:bg-slate-800/60 dark:text-slate-400">
-        <p className="font-medium text-slate-800 dark:text-slate-200">{group.offers.length} 个授权组报价 · 仅供对比</p>
-        <p className="mt-1">{routingSummary(routing)} 输入、输出最低价可能来自不同组，不能组合为单次调用价格。</p>
+        <p className="font-medium text-slate-800 dark:text-slate-200">{group.offers.length} 个分组报价</p>
+        <p className="mt-1">{routingSummary(routing)}</p>
       </div>
       {group.offers.map(m => <ModelOfferCard key={offerKey(m)} m={m} tzOffsetMinutes={tzOffsetMinutes} />)}
-      <p className="text-xs leading-relaxed text-slate-500 dark:text-slate-400">价格单位为人民币；展示价格已计入当前峰谷倍率，实际调用以请求时计价为准。</p>
+      <p className="text-xs leading-relaxed text-slate-500 dark:text-slate-400">价格单位为人民币，已计入当前峰谷倍率。</p>
     </div>
   </Drawer>;
 }
@@ -330,9 +332,20 @@ export function ConsoleModelsSquare({ models, loading, error }: {
   }, [categoryCandidates, category, sort, videoVariant]);
   const selected = groups.find(g => g.model_name === detail);
   const tzOffsetMinutes = models?.peak_pricing_tz_offset_minutes;
-  return <Card title="模型广场" action={<span className="text-xs text-slate-500 dark:text-slate-400">{groups.length} 个模型 · {models?.items.length || 0} 个组报价 · {filtered.length} 个显示</span>}>
+  return <Card title="可用模型" action={<span className="text-xs text-slate-500 dark:text-slate-400">显示 {filtered.length} / {groups.length} 个模型 · {models?.items.length || 0} 个分组报价</span>}>
     {loading ? <Spinner text="正在加载模型…" /> : error ? <div className="text-sm text-rose-600 dark:text-rose-400">{error.message}</div> : !groups.length ? <Empty text="当前没有授权模型，请联系网关所有者" /> : <div className="space-y-4">
-      <p className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs leading-relaxed text-slate-600 dark:border-slate-800 dark:bg-slate-900/60 dark:text-slate-400">{routingSummary(models?.routing)} 最低价已计入峰谷倍率；输入价和输出价可能来自不同分组，不能代表同一次调用的总价。向量仅收输入 Token。视频按规格报价并在成功任务后结算；不同接口、规格与条件不可混比。按次、缓存和联网搜索价格分列；缓存未单独定价时按输入价计费，未定价不等于免费。</p>
+      <details className="group rounded-lg border border-slate-200 bg-slate-50 text-xs leading-relaxed text-slate-600 dark:border-slate-800 dark:bg-slate-900/60 dark:text-slate-400">
+        <summary className="flex cursor-pointer list-none items-start justify-between gap-3 px-3 py-2 [&::-webkit-details-marker]:hidden">
+          <span>{routingSummary(models?.routing)}</span>
+          <span className="shrink-0 font-medium text-blue-600 group-open:hidden dark:text-blue-400">计价说明</span>
+          <span className="hidden shrink-0 font-medium text-blue-600 group-open:inline dark:text-blue-400">收起</span>
+        </summary>
+        <ul className="list-disc space-y-1 border-t border-slate-200 px-3 py-2 pl-7 dark:border-slate-800">
+          <li>价格单位为人民币，已计入当前峰谷倍率。</li>
+          <li>输入价与输出价的最低报价可能来自不同分组。</li>
+          <li>缓存未单独定价时按输入价计费。视频只有成功的任务计费。</li>
+        </ul>
+      </details>
       <div className="flex flex-wrap items-center gap-2">
         <Input value={q} onChange={e => setQ(e.target.value)} placeholder="搜索模型 / 别名 / 服务组 / 分类" className="w-full sm:w-60" />
         <div role="group" aria-label="模型类型" className="flex gap-1 overflow-x-auto">{FILTERS.filter(f => f.key !== "reasoning" && f.key !== "call").map(f => <Button key={f.key} size="sm" variant={filter === f.key ? "primary" : "ghost"} aria-pressed={filter === f.key} onClick={() => setFilter(f.key)}>{f.label}</Button>)}</div>

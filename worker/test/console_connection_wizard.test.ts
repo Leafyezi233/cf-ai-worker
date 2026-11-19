@@ -89,22 +89,24 @@ describe("connection wizard SSR (not browser E2E)", () => {
     vi.stubGlobal("sessionStorage", { getItem: readToken });
     vi.stubGlobal("localStorage", { getItem: readToken });
     const html = render(snapshot([model()]));
-    expect(html.indexOf("1 · 选择客户端与协议")).toBeLessThan(html.indexOf("2 · 选择兼容模型"));
-    expect(html.indexOf("2 · 选择兼容模型")).toBeLessThan(html.indexOf("3 · 复制占位密钥配置"));
+    const steps = ["准备 API 密钥", "选择你的客户端", "选择模型", "填入配置并运行"].map(label => html.indexOf(label));
+    expect(steps.every(index => index >= 0)).toBe(true);
+    expect([...steps].sort((a, b) => a - b)).toEqual(steps);
+    expect(html.indexOf("准备 API 密钥")).toBeLessThan(html.indexOf("更多接口与参考"));
     for (const label of ["接入客户端", "接入协议", "兼容模型"]) expect(html).toContain('aria-label="' + label + '"');
-    expect(html).toContain("$CPG_API_KEY"); expect(html).toContain("不会传给第三方配置服务");
-    expect(html).toContain("不会自动展开占位符"); expect(html).toContain("Token 管理创建子 Token");
-    expect(html).toContain("生成 DSH 配置 JSON"); expect(html).toContain("/v1/embeddings"); expect(html).toContain("/v1/videos");
+    expect(html).toContain("$CPG_API_KEY");
+    expect(html).toContain("Token 管理创建子 Token");
+    expect(html).toContain("DeepSeek Harness"); expect(html).not.toContain("DSH profile JSON"); expect(html).toContain("/v1/embeddings"); expect(html).toContain("/v1/videos");
     expect(fetcher).not.toHaveBeenCalled(); expect(readToken).not.toHaveBeenCalled();
   });
   it.each([null, undefined])("blocks configuration when the authorized snapshot is missing (%s)", (value) => {
     const html = render(value);
-    expect(html).toContain("暂不生成配置"); expect(html).not.toContain("客户端字段清单 · 占位密钥");
+    expect(html).toContain("模型列表加载失败"); expect(html).not.toContain('aria-label="示例代码"');
   });
   it("distinguishes an empty compatible set from unloaded data and never offers fake wizard models", () => {
     const html = render(snapshot([model({ model_type: "embedding", chat_endpoint: "/v1/embeddings" })]));
-    expect(html).toContain("当前权限下没有兼容此客户端 / 协议的文本模型");
-    expect(html).not.toContain("客户端字段清单 · 占位密钥");
+    expect(html).toContain("没有支持此客户端 / 协议的文本模型");
+    expect(html).not.toContain('aria-label="示例代码"');
   });
   it("offers an optional local key-management callback without invoking it during SSR", () => {
     const onOpenKeys = vi.fn(), onOpenModels = vi.fn();
@@ -112,11 +114,43 @@ describe("connection wizard SSR (not browser E2E)", () => {
     expect(html).toContain("创建子 Token →"); expect(onOpenKeys).not.toHaveBeenCalled(); expect(onOpenModels).not.toHaveBeenCalled();
   });
   it("renders Responses, Messages and DSH selected states with protocol-specific guidance", () => {
-    expect(wizard([model({ protocol_capabilities: { supported_endpoints: [responses] } })], "openai", responses)).toContain('value="/v1/responses" selected=""');
+    expect(wizard([model({ protocol_capabilities: { supported_endpoints: [responses] } })], "openai", responses)).toMatch(/role="radio" aria-checked="true"[^>]*><span[^>]*>Responses</);
     const anthropic = wizard([model({ chat_endpoint: messages })], "anthropic");
-    expect(anthropic).toContain('value="/v1/messages" selected=""'); expect(anthropic).toContain("max_tokens");
+    expect(anthropic).toMatch(/role="radio" aria-checked="true"[^>]*><span[^>]*>Anthropic</); expect(anthropic).not.toContain('aria-label="接入协议"'); expect(anthropic).toContain("max_tokens");
     const dsh = wizard([model()], "dsh");
-    expect(dsh).toContain("字段清单不能代替 DSH profile"); expect(dsh).toContain("真实上下文与输出上限");
-    expect(wizard([model({ max_output_tokens: undefined })], "dsh")).not.toContain("客户端字段清单 · 占位密钥");
+    expect(dsh).toContain("真实上下文与输出上限");
+    expect(wizard([model({ max_output_tokens: undefined })], "dsh")).not.toContain('aria-label="示例代码"');
+  });
+});
+
+describe("connection wizard runnable snippets", () => {
+  it("generates protocol-specific examples for the selected model that read the key from the environment", async () => {
+    const { connectionSnippets } = await import(guidePath);
+    const chatConfig = connectionConfig([model({ alias: "public-alias" })], "openai", chat, "");
+    const chatSnippets = connectionSnippets(chatConfig, chat);
+    expect(chatSnippets.curl).toContain("http://127.0.0.1:8787/v1/chat/completions");
+    expect(chatSnippets.curl).toContain('"model": "public-alias"');
+    expect(chatSnippets.python).toContain("chat.completions.create");
+    expect(chatSnippets.env).toContain("OPENAI_BASE_URL");
+    const responsesConfig = connectionConfig([model({ protocol_capabilities: { supported_endpoints: [responses] } })], "openai", responses, "");
+    expect(connectionSnippets(responsesConfig, responses).node).toContain("responses.create");
+    const messagesConfig = connectionConfig([model({ chat_endpoint: messages })], "anthropic", messages, "");
+    const messagesSnippets = connectionSnippets(messagesConfig, messages);
+    expect(messagesSnippets.curl).toContain('"max_tokens": 1024');
+    expect(messagesSnippets.python).toContain('base_url="http://127.0.0.1:8787"');
+    expect(messagesSnippets.env).toContain("ANTHROPIC_BASE_URL");
+    for (const snippets of [chatSnippets, messagesSnippets]) for (const code of Object.values(snippets)) {
+      expect(code).not.toMatch(/ccs_[A-Za-z0-9]/);
+      expect(code).toMatch(/CPG_API_KEY/);
+    }
+  });
+  it("uses the page origin as gateway base in a browser and the local default elsewhere", async () => {
+    const { gatewayBase } = await import(guidePath);
+    expect(gatewayBase()).toBe("http://127.0.0.1:8787");
+    vi.stubGlobal("window", { location: { origin: "https://gw.example.test" } });
+    expect(gatewayBase()).toBe("https://gw.example.test");
+    expect(connectionConfig([model()], "openai", chat, "")?.baseURL).toBe("https://gw.example.test/v1");
+    vi.stubGlobal("window", { location: { origin: "null" } });
+    expect(gatewayBase()).toBe("http://127.0.0.1:8787");
   });
 });

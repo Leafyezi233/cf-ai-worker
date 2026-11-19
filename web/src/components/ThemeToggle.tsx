@@ -1,9 +1,12 @@
 import { useState, useRef, useEffect } from "react";
-import { useTheme, type Theme } from "../hooks/useTheme";
+import { useOptionalTheme, type Theme } from "../hooks/useTheme";
 import { IconSun, IconMoon, IconMonitor, IconCheck } from "./icons";
 
 export function ThemeToggle({ className = "" }: { className?: string }) {
-  const { theme, resolvedTheme, setTheme } = useTheme();
+  const context = useOptionalTheme();
+  const theme = context?.theme ?? "system";
+  const resolvedTheme = context?.resolvedTheme ?? "light";
+  const setTheme = (value: Theme) => context?.setTheme(value);
   const [open, setOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -26,6 +29,8 @@ export function ThemeToggle({ className = "" }: { className?: string }) {
     { value: "dark", label: "深色模式", icon: IconMoon },
     { value: "system", label: "跟随系统", icon: IconMonitor },
   ];
+
+  if (!context) return null;
 
   const CurrentIcon =
     theme === "system"

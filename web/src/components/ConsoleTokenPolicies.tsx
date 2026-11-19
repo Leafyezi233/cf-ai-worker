@@ -58,11 +58,11 @@ function sourceLabel(source: string | null): string {
 export function ConsoleRoutingPreviewResult({ preview }: { preview: ConsoleRoutingPreview }) {
   const routes = preview.routes.filter((route, index, all) => route.service_group !== null || all.findIndex(item => item.service_group === null) === index);
   return <div className="space-y-2 text-sm" aria-live="polite">
-    <p>{preview.available ? "解析可用（不是实际调用承诺）" : "解析不可用"}{preview.error ? " · " + preview.error : ""}</p>
+    <p>{preview.available ? "可用" : "不可用"}{preview.error ? " · " + preview.error : ""}</p>
     <p>来源：{sourceLabel(preview.source)} · 版本：{preview.version || "—"}</p>
     {preview.public_name && <p>公开调用名：{preview.public_name}</p>}
     <p>{preview.explanation}</p>
-    {preview.legacy_fallback && <p>无服务报价，使用已授权的旧版回退；不是配置异常的兜底。</p>}
+    {preview.legacy_fallback && <p>没有分组报价，使用默认路由。</p>}
     <ol aria-label="解析候选及报价" className="space-y-2">
       {routes.map(route => <li key={route.order + ":" + (route.service_group?.id || route.identity)} className="rounded border border-slate-200 dark:border-slate-700 p-2">
         <p>{route.order}. {route.service_group?.name || "旧版默认路由"} · {route.public_name}</p>
@@ -138,16 +138,15 @@ function RoutingPreviewPanel({ target, label }: { target: string; label: string 
     } finally { if (alive.current && sequence === previewSequence.current) setPreviewLoading(false); }
   };
   return (
-    <section aria-label="只读路由解析预览" className="space-y-2 border-t border-slate-200 dark:border-slate-700 pt-3">
-      <h3 className="font-medium">只读路由解析预览 · {label}</h3>
-      <p className="text-sm">仅预览。</p>
+    <section aria-label="路由预览" className="space-y-2 border-t border-slate-200 dark:border-slate-700 pt-3">
+      <h3 className="font-medium">路由预览 · {label}</h3>
       <label className="block text-sm">公开调用名（含兼容名）
         <Input aria-label="预览公开调用名" value={model} onChange={event => {
           setModel(event.target.value); setPreview(null); setPreviewError(null); previewSequence.current++; setPreviewLoading(false);
         }} placeholder="输入客户端 model 字段" />
       </label>
       <Button type="button" variant="secondary" disabled={!model.trim() || previewLoading} onClick={runPreview}>
-        {previewLoading ? "正在只读解析…" : "解析已保存策略"}
+        {previewLoading ? "解析中…" : "预览路由"}
       </Button>
       {previewError && <p role="alert">{previewError}</p>}
       {preview && <ConsoleRoutingPreviewResult preview={preview} />}
@@ -164,7 +163,7 @@ export function ConsoleTokenPolicies({ tokens, onChanged }: ConsoleTokenPolicies
   const active = targets.find(target => target.id === selected);
   return <div className="space-y-4"><Card title="令牌调用策略与模型范围">
     <div className="space-y-4">
-      <p className="text-sm">先选择要设置的对象。主 Token 和子 Token 都可使用账户默认设置，也可各自单独设置；子 Token 不会跟随主 Token 的单独设置。</p>
+      <p className="text-sm">主 Token 和子 Token 默认沿用账户默认设置，也可以单独设置。子 Token 不会跟随主 Token 的单独设置。</p>
       <label className="block text-sm">编辑对象
         <Select aria-label="策略编辑对象" value={active?.id || ""} onChange={event => setSelected(event.target.value)}>
           <option value="">请选择编辑对象…</option>
@@ -177,9 +176,9 @@ export function ConsoleTokenPolicies({ tokens, onChanged }: ConsoleTokenPolicies
       </section> : <p className="text-sm text-slate-500">选择后将在下方展开该对象的设置。</p>}
     </div>
   </Card>
-  <Card title="只读路由解析预览">
+  <Card title="路由预览">
     <div className="space-y-4">
-      <p className="text-sm text-slate-500">仅预览已保存的策略。</p>
+      <p className="text-sm text-slate-500">输入模型名，查看请求会路由到哪个分组以及对应价格。</p>
       <label className="block text-sm">预览对象
         <Select aria-label="路由预览对象" value={previewActive?.id || ""} onChange={event => setPreviewTarget(event.target.value)}>
           <option value="">请选择预览对象…</option>

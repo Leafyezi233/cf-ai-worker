@@ -38,18 +38,15 @@ function text(html: string) {
 describe("console login and balance contact UI (SSR)", () => {
   it("shows generic operator guidance without mail links", () => {
     const html = render(React.createElement(ConsoleContact));
-    expect(text(html)).toContain("若无账号，可联系负责人获取。");
-    expect(text(html)).toContain("请通过部署方提供的联系渠道联系管理员。");
+    expect(text(html)).toContain("还没有账号？请联系管理员获取设备 Token。");
     expect(html).not.toContain("mailto:");
-    expect(text(html)).toContain("请勿通过公开渠道发送 Token 或密码。");
     expect(html).not.toContain("subject=");
     expect(html).not.toContain("body=");
   });
 
   it("shows the balance recharge contact beneath the balance value", () => {
     const html = render(React.createElement(ConsoleContact, { balance: true }));
-    expect(text(html)).toContain("联系负责人添加余额");
-    expect(text(html)).toContain("请通过部署方提供的联系渠道联系管理员。");
+    expect(text(html)).toContain("需要充值请联系管理员");
     expect(text(html)).not.toContain("Token");
     expect(html).not.toContain("mailto:");
   });
@@ -81,8 +78,8 @@ describe("console login and balance contact UI (SSR)", () => {
 
   it("renders an enabled token gate for password-manager autofill", () => {
     const html = render(React.createElement(TokenGate, { onSaved: () => {} }));
-    expect(text(html)).toContain("若无账号，可联系负责人获取。");
-    expect(text(html)).toContain("Token 将发送至当前网关进行身份验证");
+    expect(text(html)).toContain("还没有账号？请联系管理员获取设备 Token。");
+    expect(text(html)).toContain("由管理员分配，以 ccs_ 开头。");
     expect(html).toContain('name="token"');
     expect(html).toContain('type="password"');
     expect(text(html)).toContain("继续验证");
@@ -97,13 +94,12 @@ describe("console login and balance contact UI (SSR)", () => {
       setItem: () => {}, removeItem: () => {},
     });
     const html = render(React.createElement(ToastProvider, null, React.createElement(ConsolePage)));
-    const balanceCard = html.match(/<div class="px-4 py-3\.5 rounded-xl[^>]*>.*?可用余额.*?<\/div><\/div>/s)?.[0];
+    const balanceCard = html.match(/<div data-stat="available-balance"[^>]*>.*?可用余额.*?<\/div><\/div>/s)?.[0];
     expect(balanceCard).toBeDefined();
     expect(text(balanceCard!)).toContain("可用余额");
     expect(text(balanceCard!)).toContain("12.50");
     expect(text(balanceCard!)).toContain("预占中");
-    expect(text(balanceCard!)).toContain("联系负责人添加余额");
-    expect(text(balanceCard!)).toContain("请通过部署方提供的联系渠道联系管理员。");
+    expect(text(balanceCard!)).toContain("需要充值请联系管理员");
     expect(balanceCard).not.toContain("mailto:");
   });
 });

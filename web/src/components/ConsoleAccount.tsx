@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   consoleAccountApi,
   ConsoleError,
@@ -6,7 +6,7 @@ import {
   type ConsoleSubToken,
 } from "../api/consoleClient";
 import { useQuery } from "../hooks/useQuery";
-import { Badge, Button, Card, Empty, Input, Spinner } from "./ui";
+import { Badge, Button, Card, CopyButton, Empty, Input, Spinner } from "./ui";
 import { useToast } from "./Toast";
 import { ConsoleTokenPolicies } from "./ConsoleTokenPolicies";
 import { ConsoleAuthShell } from "./ConsoleAuthShell";
@@ -82,7 +82,7 @@ export function PasswordScreen({
       const check = await consoleAccountApi.session();
       if (!check.authenticated) {
         setError(
-          "登录状态无法保存：会话凭证没有被保存（可能通过 http:// 访问、浏览器禁用了 Cookie，或所在网络剥离了登录状态）。请使用 https:// 直连后重试。"
+          "登录状态未能保存。请使用 https:// 访问，并确认浏览器允许 Cookie。"
         );
         return;
       }
@@ -114,8 +114,7 @@ export function PasswordScreen({
               {isSetup ? (
                 <>
                   Token 已验证{deviceName ? "（" + deviceName + "）" : ""}。
-                  请设置一个控制台密码，{PASSWORD_MIN}-{PASSWORD_MAX} 位，只能用字母、数字和常见英文符号。之后新建、停用 Token 等操作都需要它。
-                  密码忘记无法自助重置，需要联系管理员。
+                  请设置 {PASSWORD_MIN}-{PASSWORD_MAX} 位控制台密码，可用字母、数字和常见英文符号。忘记密码需联系管理员重置。
                 </>
               ) : (
                 <>请输入该设备 Token 对应的控制台密码。</>
@@ -160,10 +159,6 @@ export function PasswordScreen({
               </>
             ) : null}
             {error ? <div role="alert" className="rounded-lg bg-rose-50 px-3 py-2 text-xs text-rose-600 dark:bg-rose-950/30 dark:text-rose-400">{error}</div> : null}
-            { 
-
-
-}
             <Button type="submit" disabled={busy} size="lg" className="w-full">
               {busy ? "处理中…" : isSetup ? "设置并进入" : "进入控制台"}
             </Button>
@@ -289,146 +284,150 @@ export function AccountPanel({ scope, section, active = true, onCallsChange, onS
 
   const rows = list?.items ?? [];
   const remaining = list?.remaining ?? 0;
+  const limit = list?.limit ?? 5;
+  const atLimit = Boolean(list) && remaining <= 0;
+  const title = section === "keys" ? "API 密钥与 Token" : section === "security" ? "账户安全" : "账户与 Token";
+
+  const securityBlock = showSecurity && <div className="flex flex-wrap items-start justify-between gap-4">
+    <div className="min-w-0 flex-1">
+      <div className="flex flex-wrap items-center gap-2 text-sm font-medium text-slate-800 dark:text-slate-100">
+        主 Token 调用
+        {callsEnabled ? <Badge tone="green" dot>允许</Badge> : <Badge tone="red" dot>已禁止</Badge>}
+      </div>
+      <p className="mt-1 max-w-2xl text-xs leading-5 text-slate-500 dark:text-slate-400">
+        禁止后，主 Token 发起的新请求会被拒绝；子 Token 和控制台登录不受影响，进行中的请求不会中断。
+      </p>
+    </div>
+    <Button variant={callsEnabled ? "outline" : "primary"} size="sm" disabled={busyId === "calls"} onClick={toggleCalls}>
+      {callsEnabled ? "禁止调用" : "恢复调用"}
+    </Button>
+  </div>;
+
+  const keysBlock = showKeys && <div className="space-y-4">
+    <p className="text-xs leading-5 text-slate-500 dark:text-slate-400">
+      每个应用单独创建一个，泄露时只需撤销那一个。子 Token 的花费计入本账户，不能用来登录控制台。
+    </p>
+    <form className="flex flex-col gap-2 sm:flex-row" onSubmit={(e) => { e.preventDefault(); void create(); }}>
+      <Input
+        aria-label="新子 Token 的用途备注"
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        placeholder="用途备注，例如 ci-runner"
+        maxLength={100}
+        disabled={atLimit}
+      />
+      <Button type="button" className="shrink-0 whitespace-nowrap" disabled={creating || !name.trim() || remaining <= 0} onClick={create}>
+        {creating ? "创建中…" : "新建"}
+      </Button>
+    </form>
+    {atLimit ? <p className="text-xs text-amber-700 dark:text-amber-300">已达到 {limit} 个可用子 Token 的上限；撤销不再使用的子 Token 后可再创建。</p> : null}
+    {freshToken && freshToken.epoch === secretContext.current.epoch ? (
+      <div role="status" className="rounded-xl border border-amber-300 bg-amber-50 p-4 dark:border-amber-900/60 dark:bg-amber-950/30">
+        <div className="text-sm font-medium text-amber-900 dark:text-amber-200">
+          「{freshToken.name}」已创建，明文只显示这一次，请立即复制保存：
+        </div>
+        <div className="mt-2 flex items-center gap-2 rounded-lg border border-amber-200 bg-white px-3 py-2 dark:border-amber-900/60 dark:bg-slate-950">
+          <code className="min-w-0 flex-1 break-all font-mono text-xs text-slate-900 dark:text-amber-100">{freshToken.token}</code>
+          <CopyButton text={freshToken.token} label="复制" />
+        </div>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <Button type="button" size="sm" variant="outline" onClick={() => setFreshToken(null)}>我已保存</Button>
+          {onOpenGuide && <Button type="button" size="sm" onClick={() => { setFreshToken(null); onOpenGuide(); }}>前往接入指南</Button>}
+        </div>
+      </div>
+    ) : null}
+
+    <div>
+      {tokensQuery.loading ? (
+        <Spinner text="正在加载子 Token…" />
+      ) : tokensQuery.error ? (
+        <div role="alert" className="text-sm text-rose-600 dark:text-rose-400">{tokensQuery.error.message}</div>
+      ) : rows.length === 0 ? (
+        <Empty text={showRevoked ? "还没有子 Token" : "还没有可用的子 Token，填写用途备注后点击“新建”"} />
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[30rem] text-sm">
+            <thead>
+              <tr className="text-left text-xs text-slate-500 dark:text-slate-400">
+                <th scope="col" className="py-2 pr-3 font-medium">备注</th>
+                <th scope="col" className="py-2 pr-3 font-medium">状态</th>
+                <th scope="col" className="py-2 pr-3 font-medium">最近使用</th>
+                <th scope="col" className="py-2 text-right font-medium">操作</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row) => (
+                <tr key={row.id} className={"border-t border-slate-100 dark:border-slate-800" + (row.revoked ? " text-slate-400 dark:text-slate-500" : "")}>
+                  <td className="py-2 pr-3 text-slate-800 dark:text-slate-200">{row.name}</td>
+                  <td className="py-2 pr-3">
+                    {row.revoked ? (
+                      <Badge tone="slate">已撤销</Badge>
+                    ) : row.enabled ? (
+                      <Badge tone="green">启用</Badge>
+                    ) : (
+                      <Badge tone="amber">已禁用</Badge>
+                    )}
+                  </td>
+                  <td className="py-2 pr-3 text-xs text-slate-500 dark:text-slate-400">
+                    {row.last_used_at ? new Date(row.last_used_at).toLocaleString() : "从未使用"}
+                  </td>
+                  <td className="whitespace-nowrap py-2 text-right">
+                    {row.revoked ? null : (
+                      <>
+                        <Button variant="ghost" size="sm" disabled={busyId === row.id} onClick={() => setEnabled(row, !row.enabled)}>
+                          {row.enabled ? "禁用" : "启用"}
+                        </Button>
+                        <Button variant="ghost" size="sm" className="text-rose-600 hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-950/40" disabled={busyId === row.id} onClick={() => revoke(row)}>
+                          撤销
+                        </Button>
+                      </>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  </div>;
+
+  const keysAction = showKeys ? <div className="flex items-center gap-3">
+    <label className="flex cursor-pointer select-none items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
+      <input
+        type="checkbox"
+        checked={showRevoked}
+        onChange={(e) => setShowRevoked(e.target.checked)}
+        className="h-3.5 w-3.5 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+      />
+      <span>显示已撤销</span>
+    </label>
+    <Badge tone={atLimit ? "amber" : "slate"}>剩余名额 {remaining} / {limit}</Badge>
+  </div> : undefined;
 
   return (
-    <Card title={section === "keys" ? "API 密钥与 Token" : section === "security" ? "账户安全" : "账户与 Token"}>
-      <div className="space-y-5">
-        {showKeys && <ConsoleTokenPolicies key={scope} onChanged={onServiceGroupsChange} tokens={rows.filter(row => !row.revoked).map(row => ({ id: row.id, name: row.name }))} />}
-        {showSecurity && <div className="flex items-start justify-between gap-4 rounded-lg border border-slate-200/80 dark:border-slate-800 px-3 py-2.5">
-          <div className="min-w-0">
-            <div className="text-sm font-medium text-slate-800 dark:text-slate-100">
-              主 Token 调用
-              {callsEnabled ? <Badge tone="green" className="ml-2">允许</Badge> : <Badge tone="red" className="ml-2">已禁止</Badge>}
-            </div>
-            <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 leading-relaxed">
-              关掉后，用主 Token 发起的调用会被拒绝；子 Token 照常可用，控制台也照常可登录，
-              正在流式返回的响应不会被打断。
-            </div>
-          </div>
-          <Button variant="outline" size="sm" disabled={busyId === "calls"} onClick={toggleCalls}>
-            {callsEnabled ? "禁止调用" : "恢复调用"}
-          </Button>
-        </div>}
-
-        {showKeys && <div>
-          <div className="flex items-center justify-between mb-2">
-            <div className="text-sm font-medium text-slate-800 dark:text-slate-100">子 Token</div>
-            <div className="flex items-center gap-3">
-              <label className="flex items-center gap-1.5 text-[11px] text-slate-500 dark:text-slate-400 select-none cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={showRevoked}
-                  onChange={(e) => setShowRevoked(e.target.checked)}
-                  className="h-3.5 w-3.5 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-                />
-                <span>显示已撤销</span>
-              </label>
-              <div className="text-[11px] text-slate-400 dark:text-slate-500">
-                剩余名额 {remaining} / {list?.limit ?? 5}
-              </div>
-            </div>
-          </div>
-          <div className="text-[11px] text-slate-500 dark:text-slate-400 mb-2 leading-relaxed">
-            子 Token 的花费全部记在主 Token 的账上，用量页可以按子 Token 拆开看。
-            子 Token 不能登录控制台。
-          </div>
-          <div className="flex gap-2">
-            <Input
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="用途备注，例如 ci-runner"
-              maxLength={100}
-            />
-            <Button size="sm" disabled={creating || !name.trim() || remaining <= 0} onClick={create}>
-              {creating ? "创建中…" : "新建"}
-            </Button>
-          </div>
-          {freshToken && freshToken.epoch === secretContext.current.epoch ? (
-            <div className="mt-2 rounded-lg border border-amber-200 dark:border-amber-900/60 bg-amber-50 dark:bg-amber-950/30 px-3 py-2">
-              <div className="text-[11px] text-amber-700 dark:text-amber-300 mb-1">
-                「{freshToken.name}」的明文如下，只显示这一次，请立即复制保存：
-              </div>
-              <code className="block break-all font-mono text-xs text-amber-900 dark:text-amber-200">{freshToken.token}</code>
-              <button
-                type="button"
-                className="mt-1 text-[11px] underline text-amber-700 dark:text-amber-300"
-                onClick={() => setFreshToken(null)}
-              >
-                我已保存
-              </button>
-              {onOpenGuide && <button type="button" className="ml-3 text-[11px] underline text-amber-700 dark:text-amber-300"
-                onClick={() => { setFreshToken(null); onOpenGuide(); }}>
-                前往接入指南
-              </button>}
-            </div>
-          ) : null}
-
-          <div className="mt-3">
-            {tokensQuery.loading ? (
-              <Spinner text="正在加载子 Token…" />
-            ) : tokensQuery.error ? (
-              <div className="text-sm text-rose-600 dark:text-rose-400">{tokensQuery.error.message}</div>
-            ) : rows.length === 0 ? (
-              <Empty text={showRevoked ? "还没有子 Token" : "还没有可用的子 Token"} />
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="text-left text-xs text-slate-500 dark:text-slate-400">
-                      <th className="py-2 pr-3 font-medium">备注</th>
-                      <th className="py-2 pr-3 font-medium">状态</th>
-                      <th className="py-2 pr-3 font-medium">最近使用</th>
-                      <th className="py-2 font-medium text-right">操作</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {rows.map((row) => (
-                      <tr key={row.id} className="border-t border-slate-100 dark:border-slate-800">
-                        <td className="py-2 pr-3 text-slate-800 dark:text-slate-200">{row.name}</td>
-                        <td className="py-2 pr-3">
-                          {row.revoked ? (
-                            <Badge tone="slate">已撤销</Badge>
-                          ) : row.enabled ? (
-                            <Badge tone="green">启用</Badge>
-                          ) : (
-                            <Badge tone="amber">已禁用</Badge>
-                          )}
-                        </td>
-                        <td className="py-2 pr-3 text-xs text-slate-500 dark:text-slate-400">
-                          {row.last_used_at ? new Date(row.last_used_at).toLocaleString() : "-"}
-                        </td>
-                        <td className="py-2 text-right whitespace-nowrap">
-                          {row.revoked ? null : (
-                            <>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                disabled={busyId === row.id}
-                                onClick={() => setEnabled(row, !row.enabled)}
-                              >
-                                {row.enabled ? "禁用" : "启用"}
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                disabled={busyId === row.id}
-                                onClick={() => revoke(row)}
-                              >
-                                撤销
-                              </Button>
-                            </>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-        </div>}
-      </div>
-    </Card>
+    <div className="space-y-5">
+      <Card title={title} action={keysAction}>
+        <div className="space-y-5">
+          {showKeys && <div className="text-sm font-medium text-slate-800 dark:text-slate-100">子 Token</div>}
+          {keysBlock}
+          {showKeys && showSecurity ? <div className="border-t border-slate-100 dark:border-slate-800" /> : null}
+          {securityBlock}
+        </div>
+      </Card>
+      {showKeys && <details className="group rounded-xl border border-slate-200/60 bg-white dark:border-slate-800 dark:bg-slate-900">
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 sm:px-5 [&::-webkit-details-marker]:hidden">
+          <span className="min-w-0">
+            <span className="block text-sm font-medium text-slate-800 dark:text-slate-100">高级：调用策略与模型范围</span>
+            <span className="mt-0.5 block text-xs text-slate-500 dark:text-slate-400">为某个 Token 单独指定服务分组和可用模型；不设置则沿用账户默认。</span>
+          </span>
+          <span aria-hidden="true" className="shrink-0 text-slate-400 transition-transform group-open:rotate-90">›</span>
+        </summary>
+        <div className="border-t border-slate-100 p-4 dark:border-slate-800 sm:p-5">
+          <ConsoleTokenPolicies key={scope} onChanged={onServiceGroupsChange} tokens={rows.filter(row => !row.revoked).map(row => ({ id: row.id, name: row.name }))} />
+        </div>
+      </details>}
+    </div>
   );
 }
 

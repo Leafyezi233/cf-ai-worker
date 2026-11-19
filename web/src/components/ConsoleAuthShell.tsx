@@ -3,9 +3,7 @@ import type { ReactNode } from "react";
 export function ConsoleContact({ balance = false }: { balance?: boolean }) {
   return (
     <div className={balance ? "mt-2 space-y-1 text-[11px] leading-relaxed" : "rounded-2xl border border-blue-100 bg-blue-50/70 p-4 text-sm leading-relaxed dark:border-blue-900/60 dark:bg-blue-950/30"}>
-      <p className="text-slate-600 dark:text-slate-400">{balance ? "联系负责人添加余额" : "若无账号，可联系负责人获取。"}</p>
-      <p className="text-slate-500 dark:text-slate-400">请通过部署方提供的联系渠道联系管理员。</p>
-      {!balance ? <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">请勿通过公开渠道发送 Token 或密码。</p> : null}
+      <p className="text-slate-500 dark:text-slate-400">{balance ? "需要充值请联系管理员" : "还没有账号？请联系管理员获取设备 Token。"}</p>
     </div>
   );
 }

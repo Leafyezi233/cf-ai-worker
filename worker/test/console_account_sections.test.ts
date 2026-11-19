@@ -90,7 +90,7 @@ describe("AccountPanel section SSR and query enablement (not browser E2E)", () =
   });
   it("security renders the existing master switch without token form, list or policy editor", async () => {
     const html = ssr("security");
-    for (const label of ["账户安全", "主 Token 调用", "恢复调用", "子 Token 照常可用", "正在流式返回的响应不会被打断"]) expect(html).toContain(label);
+    for (const label of ["账户安全", "主 Token 调用", "恢复调用", "子 Token 和控制台登录不受影响"]) expect(html).toContain(label);
     for (const label of ["用途备注", "策略编辑对象", "显示已撤销", "研发", "新建"]) expect(html).not.toContain(label);
     expect(f.queries.map(q => q.options.enabled)).toEqual([false, true]);
     await Promise.all(f.queries.filter(q => q.options.enabled).map(q => q.fetcher()));

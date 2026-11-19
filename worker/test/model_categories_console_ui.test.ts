@@ -27,7 +27,7 @@ describe("console model categories (rendered React SSR and filter logic, not bro
     expect(rendered).toContain("全部分类 (2)");
     expect(rendered).toContain("分类-code (1)");
     expect(rendered).toContain("未分类 (1)");
-    expect(rendered).toContain("2 个模型 · 3 个组报价 · 2 个显示");
+    expect(rendered).toContain("显示 2 / 2 个模型 · 3 个分组报价");
     expect(rendered).toContain("输入最低¥1/M tokencheap-input");
     expect(rendered).toContain("输出最低¥2/M tokencheap-output");
     expect(rendered).toContain("2 个授权组报价");
