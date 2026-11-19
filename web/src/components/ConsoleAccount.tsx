@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   consoleAccountApi,
   ConsoleError,
@@ -179,24 +179,45 @@ export function PasswordScreen({
   );
 }
 
-export function AccountPanel({ scope, onCallsChange, onServiceGroupsChange }: { scope: string; onCallsChange: (enabled: boolean) => void; onServiceGroupsChange?: () => void }) {
+export function AccountPanel({ scope, section, active = true, onCallsChange, onServiceGroupsChange, onOpenGuide }: {
+  scope: string;
+  section?: "keys" | "security";
+  active?: boolean;
+  onCallsChange: (enabled: boolean) => void;
+  onServiceGroupsChange?: () => void;
+  onOpenGuide?: () => void;
+}) {
+  const showKeys = section !== "security";
+  const showSecurity = section !== "keys";
   const toast = useToast();
   const [name, setName] = useState("");
   const [creating, setCreating] = useState(false);
-  const [freshToken, setFreshToken] = useState<{ name: string; token: string } | null>(null);
+  const [freshToken, setFreshToken] = useState<{ name: string; token: string; epoch: number } | null>(null);
+  const secretActive = active && showKeys;
+  const secretContext = useRef({ scope, showKeys: secretActive, epoch: 0 });
+  if (secretContext.current.scope !== scope || secretContext.current.showKeys !== secretActive) {
+    secretContext.current = { scope, showKeys: secretActive, epoch: secretContext.current.epoch + 1 };
+  }
+  useEffect(() => {
+    setFreshToken(null);
+    return () => { secretContext.current.epoch++; };
+  }, [scope, secretActive]);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [showRevoked, setShowRevoked] = useState(false);
 
   const tokensQuery = useQuery(
     "console:" + scope + (showRevoked ? ":tokens:with-revoked" : ":tokens"),
     () => consoleAccountApi.tokens(showRevoked),
-    { ttlMs: 0 }
+    { ttlMs: 0, enabled: active && showKeys }
   );
   const callsQuery = useQuery(
     "console:" + scope + ":calls",
     () => consoleAccountApi.calls(),
-    { ttlMs: 0 }
+    { ttlMs: 0, enabled: active && showSecurity }
   );
+
+  const refreshTokens = useRef(tokensQuery.refresh);
+  refreshTokens.current = tokensQuery.refresh;
 
   const list = tokensQuery.data;
   const callsEnabled = callsQuery.data?.calls_enabled ?? true;
@@ -218,14 +239,19 @@ export function AccountPanel({ scope, onCallsChange, onServiceGroupsChange }: { 
 
   const create = async () => {
     const trimmed = name.trim();
-    if (!trimmed) return;
+    if (!trimmed || creating || !secretActive) return;
+    const epoch = secretContext.current.epoch;
     setCreating(true);
     try {
       const res = await consoleAccountApi.createToken(trimmed);
-      setFreshToken({ name: res.item.name, token: res.token });
+      if (secretContext.current.epoch === epoch && secretContext.current.showKeys) {
+        setFreshToken({ name: res.item.name, token: res.token, epoch });
+        refreshTokens.current(true);
+        toast.success("已创建子 Token，明文只显示这一次");
+      } else {
+        toast.success("已创建子 Token；已离开密钥页面，明文已清除。如未保存，请撤销后重新创建。");
+      }
       setName("");
-      tokensQuery.refresh(true);
-      toast.success("已创建子 Token，明文只显示这一次");
     } catch (err) {
       const code = err instanceof ConsoleError ? (err as ConsoleError & { code?: string }).code : undefined;
       toast.error(code === "sub_token_limit_reached" ? "最多只能有 5 个可用子 Token" : err instanceof Error ? err.message : "创建失败");
@@ -238,7 +264,7 @@ export function AccountPanel({ scope, onCallsChange, onServiceGroupsChange }: { 
     setBusyId(row.id);
     try {
       await consoleAccountApi.setTokenEnabled(row.id, enabled);
-      tokensQuery.refresh(true);
+      refreshTokens.current(true);
       toast.success(enabled ? "已启用" : "已禁用");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "操作失败");
@@ -252,7 +278,7 @@ export function AccountPanel({ scope, onCallsChange, onServiceGroupsChange }: { 
     setBusyId(row.id);
     try {
       await consoleAccountApi.revokeToken(row.id);
-      tokensQuery.refresh(true);
+      refreshTokens.current(true);
       toast.success("已撤销");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "操作失败");
@@ -265,10 +291,10 @@ export function AccountPanel({ scope, onCallsChange, onServiceGroupsChange }: { 
   const remaining = list?.remaining ?? 0;
 
   return (
-    <Card title="账户与 Token">
+    <Card title={section === "keys" ? "API 密钥与 Token" : section === "security" ? "账户安全" : "账户与 Token"}>
       <div className="space-y-5">
-        <ConsoleTokenPolicies key={scope} onChanged={onServiceGroupsChange} tokens={rows.filter(row => !row.revoked).map(row => ({ id: row.id, name: row.name }))} />
-        <div className="flex items-start justify-between gap-4 rounded-lg border border-slate-200/80 dark:border-slate-800 px-3 py-2.5">
+        {showKeys && <ConsoleTokenPolicies key={scope} onChanged={onServiceGroupsChange} tokens={rows.filter(row => !row.revoked).map(row => ({ id: row.id, name: row.name }))} />}
+        {showSecurity && <div className="flex items-start justify-between gap-4 rounded-lg border border-slate-200/80 dark:border-slate-800 px-3 py-2.5">
           <div className="min-w-0">
             <div className="text-sm font-medium text-slate-800 dark:text-slate-100">
               主 Token 调用
@@ -282,9 +308,9 @@ export function AccountPanel({ scope, onCallsChange, onServiceGroupsChange }: { 
           <Button variant="outline" size="sm" disabled={busyId === "calls"} onClick={toggleCalls}>
             {callsEnabled ? "禁止调用" : "恢复调用"}
           </Button>
-        </div>
+        </div>}
 
-        <div>
+        {showKeys && <div>
           <div className="flex items-center justify-between mb-2">
             <div className="text-sm font-medium text-slate-800 dark:text-slate-100">子 Token</div>
             <div className="flex items-center gap-3">
@@ -317,7 +343,7 @@ export function AccountPanel({ scope, onCallsChange, onServiceGroupsChange }: { 
               {creating ? "创建中…" : "新建"}
             </Button>
           </div>
-          {freshToken ? (
+          {freshToken && freshToken.epoch === secretContext.current.epoch ? (
             <div className="mt-2 rounded-lg border border-amber-200 dark:border-amber-900/60 bg-amber-50 dark:bg-amber-950/30 px-3 py-2">
               <div className="text-[11px] text-amber-700 dark:text-amber-300 mb-1">
                 「{freshToken.name}」的明文如下，只显示这一次，请立即复制保存：
@@ -330,6 +356,10 @@ export function AccountPanel({ scope, onCallsChange, onServiceGroupsChange }: { 
               >
                 我已保存
               </button>
+              {onOpenGuide && <button type="button" className="ml-3 text-[11px] underline text-amber-700 dark:text-amber-300"
+                onClick={() => { setFreshToken(null); onOpenGuide(); }}>
+                前往接入指南
+              </button>}
             </div>
           ) : null}
 
@@ -396,7 +426,7 @@ export function AccountPanel({ scope, onCallsChange, onServiceGroupsChange }: { 
               </div>
             )}
           </div>
-        </div>
+        </div>}
       </div>
     </Card>
   );

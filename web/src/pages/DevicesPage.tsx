@@ -1,11 +1,17 @@
-import { useCallback, useState, type FormEvent } from "react";
+import { useCallback, useMemo, useState, type FormEvent } from "react";
 import { api, ApiError, fmtTime } from "../api/client";
 import type { DeviceItem, DeviceModelScopeResponse, ModelScope } from "../types";
-import { Badge, Button, Card, Drawer, Empty, Input, Modal, Spinner } from "../components/ui";
+import { Badge, Button, Card, Drawer, Empty, Input, Modal, Select, Spinner } from "../components/ui";
 import { IconPlus, IconEdit, IconDevices, IconShield, IconCopy } from "../components/icons";
 import { useToast } from "../components/Toast";
 import { useQuery } from "../hooks/useQuery";
 import { VideoDiagnosticControls } from "../components/VideoDiagnosticControls";
+
+import { useAdminFilters } from "../hooks/useAdminFilters";
+import { AdminListToolbar } from "../components/AdminListToolbar";
+
+const FILTERS = { q: "", enabled: "", sort: "", revoked: "", calls: "", scope: "", state: "", routing: "", service: "" };
+const EMPTY_DEVICES: DeviceItem[] = [];
 
 interface CreateResponse {
   item: DeviceItem;
@@ -46,14 +52,15 @@ const TOPUP_MODES: { id: TopupMode; label: string; hint: string; variant: "succe
 ];
 export default function DevicesPage() {
   const toast = useToast();
-  const [showRevoked, setShowRevoked] = useState(false);
+  const [filters, setFilter, resetFilters] = useAdminFilters(FILTERS);
+  const showRevoked = filters.revoked === "1";
   const fetchDevices = useCallback(async () => {
-    const path = showRevoked ? "/api/devices?include_revoked=1" : "/api/devices";
+    const path = showRevoked ? "/api/devices?include_routing=1&include_revoked=1" : "/api/devices?include_routing=1";
     const res = await api.get<{ items: DeviceItem[] }>(path);
     return res.items || [];
   }, [showRevoked]);
 
-  const { data: items = [], loading, refresh } = useQuery(
+  const { data: items = EMPTY_DEVICES, loading, isRefreshing, error: listError, refresh } = useQuery(
     showRevoked ? "devices-list:with-revoked" : "devices-list",
     fetchDevices
   );
@@ -356,6 +363,23 @@ export default function DevicesPage() {
     });
   }
 
+  const visibleItems = useMemo(() => {
+    const q = filters.q.trim().toLowerCase();
+    const result = items.filter(d => {
+      const blocked = (d.cost_limit_monthly || 0) > 0 && (d.current_month_cost || 0) >= (d.cost_limit_monthly || 0);
+      return (!q || [d.name, d.id].some(v => v.toLowerCase().includes(q)))
+        && (showRevoked || !d.revoked_at)
+        && (!filters.enabled || String(Number(Boolean(d.enabled))) === filters.enabled)
+        && (!filters.calls || String(Number(callsAllowed(d))) === filters.calls)
+        && (!filters.scope || (d.model_scope || "all") === filters.scope)
+        && (!filters.routing || d.routing_policy_mode === filters.routing)
+        && (!filters.service || [d.selected_service_group_id, d.selected_service_group_name, ...(d.routing_group_ids ?? [])].some(value => value?.toLowerCase().includes(filters.service.toLowerCase().trim())))
+        && (!filters.state || (filters.state === "revoked" ? Boolean(d.revoked_at) : filters.state === "blocked" ? !d.revoked_at && blocked : !d.revoked_at && !blocked && Boolean(d.enabled) && callsAllowed(d)));
+    });
+    if (filters.sort) result.sort((a, b) => (a.name.localeCompare(b.name) || a.id.localeCompare(b.id)) * (filters.sort === "name-desc" ? -1 : 1));
+    return result;
+  }, [items, filters, showRevoked]);
+
   if (loading && !items.length) return <Spinner text="正在加载设备 Token 列表…" />;
 
   return (
@@ -372,7 +396,7 @@ export default function DevicesPage() {
             <input
               type="checkbox"
               checked={showRevoked}
-              onChange={(e) => setShowRevoked(e.target.checked)}
+              onChange={(e) => setFilter("revoked", e.target.checked ? "1" : "")}
               className="h-3.5 w-3.5 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
             />
             <span>显示已撤销</span>
@@ -393,8 +417,16 @@ export default function DevicesPage() {
         </div>
       </div>
 
+      <AdminListToolbar filters={filters} onChange={setFilter} onReset={resetFilters} total={items.length} count={visibleItems.length} loading={loading || isRefreshing} error={listError?.message} onRefresh={() => { void refresh(); }} searchPlaceholder="搜索设备名称 / ID（勿输入密钥）">
+        <Select aria-label="调用策略" className="!w-auto" value={filters.calls} onChange={e => setFilter("calls", e.target.value)}><option value="">全部调用策略</option><option value="1">允许调用</option><option value="0">禁止调用</option></Select>
+        <Select aria-label="模型范围" className="!w-auto" value={filters.scope} onChange={e => setFilter("scope", e.target.value)}><option value="">全部模型范围</option>{Object.entries(SCOPE_LABELS).map(([id, label]) => <option key={id} value={id}>{label}</option>)}</Select>
+        <Select aria-label="设备状态" className="!w-auto" value={filters.state} onChange={e => setFilter("state", e.target.value)}><option value="">全部设备状态</option><option value="normal">正常可调用</option><option value="blocked">月额熔断</option><option value="revoked">已撤销（需显示已撤销）</option></Select>
+        <Select aria-label="主令牌路由模式" className="!w-auto" value={filters.routing} onChange={e => setFilter("routing", e.target.value)}><option value="">全部路由模式</option>{["auto", "legacy", "fixed", "multi", "unknown"].map(mode => <option key={mode} value={mode}>{mode}</option>)}</Select>
+        <Input aria-label="选中服务分组" className="sm:!w-56" placeholder="主令牌服务组名称 / ID" value={filters.service} onChange={e => setFilter("service", e.target.value)} />
+      </AdminListToolbar>
+      <p className="text-xs text-slate-400">筛选主令牌的已选服务组与路由模式，不代表可访问授权范围，不包含子 Token 覆盖。多组选组按 ID 匹配；刷新保留已打开的编辑草稿。</p>
       <Card>
-        {items.length ? (
+        {visibleItems.length ? (
           <div className="overflow-x-auto -mx-4 -my-4 sm:mx-0 sm:my-0">
             <table className="w-full text-left text-xs sm:text-sm min-w-[600px]">
               <thead>
@@ -411,7 +443,7 @@ export default function DevicesPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                {items.map((d) => {
+                {visibleItems.map((d) => {
                   const spend = d.current_month_cost || 0;
                   const limit = d.cost_limit_monthly || 0;
                   const isBlocked = limit > 0 && spend >= limit;
@@ -560,7 +592,7 @@ export default function DevicesPage() {
             </table>
           </div>
         ) : (
-          <Empty text="尚未签发任何设备 Token" icon={<IconDevices className="w-8 h-8" />} />
+          <Empty text={listError && !items.length ? "设备列表加载失败，请重试" : items.length ? "没有符合筛选条件的设备" : "尚未签发任何设备 Token"} icon={<IconDevices className="w-8 h-8" />} />
         )}
       </Card>
 
@@ -1098,4 +1130,3 @@ export default function DevicesPage() {
     </div>
   );
 }
-

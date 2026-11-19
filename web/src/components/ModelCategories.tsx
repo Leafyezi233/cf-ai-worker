@@ -73,7 +73,12 @@ export function useModelCategories() {
 }
 export type ModelCategoriesState = ReturnType<typeof useModelCategories>;
 const message = (err: unknown) => err instanceof Error ? err.message : "分类操作失败";
-const sorted = (items: CategoryRow[]) => [...items].sort((a, b) => a.sort_order - b.sort_order || a.name.localeCompare(b.name));
+const sortedCategories = new WeakMap<CategoryRow[], CategoryRow[]>();
+const sorted = (items: CategoryRow[]) => {
+  let result = sortedCategories.get(items);
+  if (!result) { result = [...items].sort((a, b) => a.sort_order - b.sort_order || a.name.localeCompare(b.name)); sortedCategories.set(items, result); }
+  return result;
+};
 
 export function ModelCategoryBadges({ data, modelName }: { data: ModelCategoriesData; modelName: string }) {
   const ids = new Set(categoryIdsForModel(data, modelName));

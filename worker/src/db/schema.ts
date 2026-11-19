@@ -649,6 +649,10 @@ export const SCHEMA_DEFINITION = { init: INIT_STATEMENTS, migrations: MIGRATION_
   { id: "usage/0001-tables", sql: USAGE_ROLLUP_TABLES },
   { id: "usage/0002-rollups", sql: USAGE_ROLLUP_TRIGGERS },
   { id: "video/0001-upstream-usage", sql: ["ALTER TABLE video_tasks ADD COLUMN upstream_usage_json TEXT"] },
+  { id: "admin-record/0001-query-indexes", sql: [
+    "CREATE INDEX IF NOT EXISTS idx_video_tasks_created_id ON video_tasks(created_at DESC, id DESC)",
+    "CREATE INDEX IF NOT EXISTS idx_audit_logs_action_created_id ON audit_logs(action, created_at DESC, id DESC)",
+  ] },
 ] };
 
 export function ensureSchema(env: Env): Promise<void> {

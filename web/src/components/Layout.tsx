@@ -4,6 +4,7 @@ import { useAuth } from "../hooks/useAuth";
 import { api } from "../api/client";
 import { Button } from "./ui";
 import { ThemeToggle } from "./ThemeToggle";
+import { useToast } from "./Toast";
 import {
   IconDashboard,
   IconProviders,
@@ -62,6 +63,7 @@ const currentSection = (pathname: string) =>
 
 export default function Layout() {
   const { logout } = useAuth();
+  const toast = useToast();
   const location = useLocation();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [isHealthy, setIsHealthy] = useState<boolean | null>(true);
@@ -248,7 +250,7 @@ export default function Layout() {
           <div className="flex items-center gap-2 sm:gap-3">
             <ThemeToggle />
             <div className="h-4 w-px bg-slate-200 dark:bg-slate-700" />
-            <Button variant="ghost" size="sm" onClick={() => logout()} title="退出登录">
+            <Button variant="ghost" size="sm" onClick={() => { void logout().catch(() => toast.error("退出失败，会话尚未撤销，请重试")); }} title="退出登录">
               <IconLogOut className="w-4 h-4 text-slate-500 dark:text-slate-400" />
               <span className="hidden sm:inline">退出登录</span>
             </Button>

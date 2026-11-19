@@ -115,7 +115,7 @@ function PolicyForm({ target, value, groups, scopeOptions, onSave, disabled, loa
   const overrideAvailable = (key: string, id: string) => optionMap.get(key)?.group_ids?.includes(id) ?? true;
   const validation = inherit ? null : tokenPolicyDraftError(draft) ?? (Object.entries(draft.model_overrides).some(([key, id]) => !overrideAvailable(key, id)) ? "模型例外在所选分组中不可用；请修改或移除该例外。" : null);
   const groupName = (id: string) => groupMap.get(id)?.name ?? id;
-  const optionName = (key: string) => optionMap.get(key)?.label ?? key;
+  const optionName = (key: string) => optionMap.get(key)?.label ?? "已失效模型";
   const update = (next: TokenRoutingPolicy) => { setDraft(next); setSaveError(""); setSaved(false); setConfirmAccount(false); };
   const sourceName = value.source === "token" ? "此 Token 独立策略" : value.source === "account" ? "账户默认" : value.source === "compatibility" ? "兼容旧配置" : value.source;
   const effective = value.effective_policy;
@@ -151,14 +151,14 @@ function PolicyForm({ target, value, groups, scopeOptions, onSave, disabled, loa
       <Select aria-label="策略来源" value={inherit ? "inherit" : "override"} disabled={locked} onChange={event => {
         setInherit(event.target.value === "inherit"); setSaved(false); setSaveError(""); setConfirmAccount(false);
       }}>
-        <option value="inherit">{account ? "不设置账户策略（沿用兼容默认）" : "继承账户默认（整份继承）"}</option>
-        <option value="override">{account ? "设置账户默认完整策略" : "使用此 Token 的完整覆盖"}</option>
+        <option value="inherit">{account ? "沿用系统默认" : "跟随账户默认"}</option>
+        <option value="override">{account ? "自定义账户默认" : "单独设置"}</option>
       </Select>
     </label>
-    <p className="text-xs leading-relaxed text-slate-500">{inherit ? (account ? "保存 null 将清除整份账户策略，沿用兼容默认。" : "保存 null 将整份继承账户默认；不是逐字段合并。") : "将保存完整策略，未设置的字段不会从账户路由策略逐项补齐。"}</p>
+    <p className="text-xs leading-relaxed text-slate-500">{inherit ? (account ? "保存后将恢复系统默认设置。" : "保存后将跟随账户默认设置。") : account ? "保存后，跟随账户默认的 Token 将使用这些设置。" : "单独设置后，不再跟随账户默认设置。"}</p>
     {compatibilityReset && !account && <p className="text-xs text-amber-700 dark:text-amber-300">当前仍可能沿用旧版单组覆盖；请保存继承，明确清除旧选择后才会整份继承账户默认。</p>}
-    <fieldset disabled={locked || inherit} className="space-y-4 disabled:opacity-60">
-      <legend className="text-sm font-medium">完整策略设置{inherit ? "（继承中，以下仅供查看）" : ""}</legend>
+    {!inherit && <fieldset disabled={locked} className="space-y-4 rounded-lg border border-slate-200 p-3 disabled:opacity-60 dark:border-slate-700">
+      <legend className="px-1 text-sm font-medium">{account ? "自定义账户默认" : "单独设置"}</legend>
       <label className="block space-y-1 text-sm">路由模式
         <Select aria-label="路由模式" value={draft.mode} onChange={event => {
           const mode = event.target.value as TokenRoutingPolicy["mode"];
@@ -199,14 +199,14 @@ function PolicyForm({ target, value, groups, scopeOptions, onSave, disabled, loa
       {missingGroups.length > 0 && <p role="alert" className="text-xs text-amber-700 dark:text-amber-300">失效或不可用分组已保留：{missingGroups.join("、")}。请明确修改或移除；不会静默删除或自动切换。</p>}
       <div className="space-y-2">
         <h4 className="text-sm font-medium">按模型固定例外</h4>
-        <p className="text-xs text-slate-500">例外仅能固定到已选分组，不会增加模型权限。模型使用稳定标识，不使用兼容调用名作键。</p>
+        <p className="text-xs text-slate-500">例外仅能固定到已选分组，不会增加模型权限。</p>
         <ul className="space-y-2">{Object.entries(draft.model_overrides).map(([key, id]) => <li key={key} className="flex flex-wrap items-center gap-2 text-sm">
-          <span>{optionName(key)} <code className="text-xs">{key}</code> → {groupName(id)}{!draft.group_ids.includes(id) && "（不在已选分组中）"}</span>
-          <Button type="button" size="sm" variant="ghost" aria-label={"移除模型例外 " + key} onClick={() => update({ ...draft, model_overrides: Object.fromEntries(Object.entries(draft.model_overrides).filter(([model]) => model !== key)) })}>移除例外</Button>
+          <span>{optionName(key)} → {groupName(id)}{!draft.group_ids.includes(id) && "（不在已选分组中）"}</span>
+          <Button type="button" size="sm" variant="ghost" aria-label={"移除模型例外 " + optionName(key)} onClick={() => update({ ...draft, model_overrides: Object.fromEntries(Object.entries(draft.model_overrides).filter(([model]) => model !== key)) })}>移除例外</Button>
         </li>)}</ul>
         <div className="grid gap-2 sm:grid-cols-3">
           <Select aria-label="例外模型" value={overrideKey} onChange={event => setOverrideKey(event.target.value)}>
-            <option value="">选择模型…</option>{options.map(option => <option key={option.key} value={option.key}>{option.label} · {option.key}</option>)}
+            <option value="">选择模型…</option>{options.map(option => <option key={option.key} value={option.key}>{option.label}</option>)}
           </Select>
           <Select aria-label="例外固定分组" value={overrideGroup} onChange={event => setOverrideGroup(event.target.value)}>
             <option value="">选择已选分组…</option>{draft.group_ids.map(id => <option key={id} value={id} disabled={!groupAvailable(groupMap.get(id)) || (!!overrideKey && !overrideAvailable(overrideKey, id))}>{groupName(id)}{!groupAvailable(groupMap.get(id)) && "（不可用）"}</option>)}
@@ -217,29 +217,29 @@ function PolicyForm({ target, value, groups, scopeOptions, onSave, disabled, loa
         </div>
       </div>
       <div className="space-y-2">
-        <h4 className="text-sm font-medium">模型权限范围（scope）</h4>
+        <h4 className="text-sm font-medium">可调用的模型</h4>
         <label className="block space-y-1 text-sm">范围来源
           <Select aria-label="模型范围来源" value={draft.model_scope === null ? "inherit" : "fixed"} onChange={event => update({ ...draft, model_scope: event.target.value === "inherit" ? null : [] })}>
-            <option value="inherit">{"不额外收窄账户授权范围（null）"}</option><option value="fixed">固定勾选范围（空集 [] = 无权限）</option>
+            <option value="inherit">{"使用账户已获授权的全部模型"}</option><option value="fixed">只允许调用勾选的模型</option>
           </Select>
         </label>
-        <p className="text-xs leading-relaxed text-slate-500">scope 只能收窄管理员赋予账户的授权，不能突破账户授权；独立 Token 使用整份独立策略，不与账户默认策略的 scope 叠加。固定集合不会因新增授权自动扩张。</p>
+        <p className="text-xs leading-relaxed text-slate-500">仅限账户已获授权的模型；新授权的模型需手动加入勾选范围。</p>
         {draft.model_scope !== null && <>
-          {draft.model_scope.length === 0 && <p role="status" className="text-xs text-amber-700 dark:text-amber-300">当前为 []：此策略不允许调用任何模型，不等同于继承。</p>}
+          {draft.model_scope.length === 0 && <p role="status" className="text-xs text-amber-700 dark:text-amber-300">尚未勾选模型：保存后将无法调用任何模型，不会自动使用账户默认范围。</p>}
           <div className="grid gap-2 sm:grid-cols-2" aria-label="模型范围勾选">{options.map(option => <label key={option.key} className="flex items-start gap-2 text-sm">
             <input type="checkbox" className="mt-1" checked={draft.model_scope!.includes(option.key)} onChange={event => update({ ...draft, model_scope: event.target.checked ? [...draft.model_scope!, option.key] : draft.model_scope!.filter(key => key !== option.key) })} />
-            <span>{option.label}{option.compatible_name && option.compatible_name !== option.label && <span className="text-xs text-slate-500">（调用名：{option.compatible_name}）</span>}<code className="block text-xs text-slate-500">{option.key}</code></span>
+            <span>{option.label}{option.compatible_name && option.compatible_name !== option.label && <span className="text-xs text-slate-500">（调用名：{option.compatible_name}）</span>}</span>
           </label>)}</div>
-          {!options.length && <p className="text-xs text-slate-500">暂无可选模型范围；不会用显示名称猜测标识。</p>}
-          {draft.model_scope.filter(key => !optionMap.has(key)).map(key => <div key={key} className="flex flex-wrap items-center gap-2 text-xs text-amber-700 dark:text-amber-300"><span>已失效范围（保留）：{key}</span><Button type="button" size="sm" variant="ghost" aria-label={"移除范围 " + key} onClick={() => update({ ...draft, model_scope: draft.model_scope!.filter(item => item !== key) })}>移除范围</Button></div>)}
+          {!options.length && <p className="text-xs text-slate-500">暂无可选模型范围。</p>}
+          {draft.model_scope.filter(key => !optionMap.has(key)).map(key => <div key={key} className="flex flex-wrap items-center gap-2 text-xs text-amber-700 dark:text-amber-300"><span>已失效模型范围（保留，请移除）</span><Button type="button" size="sm" variant="ghost" aria-label="移除失效模型范围" onClick={() => update({ ...draft, model_scope: draft.model_scope!.filter(item => item !== key) })}>移除范围</Button></div>)}
         </>}
       </div>
-      {missingKeys.length > 0 && <p role="alert" className="text-xs text-amber-700 dark:text-amber-300">当前目录未找到的稳定标识已保留：{missingKeys.join("、")}。仅管理员授权仍然有效时才可使用。</p>}
-    </fieldset>
+      {missingKeys.length > 0 && <p role="alert" className="text-xs text-amber-700 dark:text-amber-300">有 {missingKeys.length} 个模型范围已失效并保留，请明确移除后再保存。</p>}
+    </fieldset>}
     {!inherit && validation && <p role="alert" className="text-xs text-rose-600">{validation}</p>}
     {saveError && <p role="alert" className="text-sm text-rose-600">保存失败：{saveError}</p>}
     {saved && <p role="status" className="text-sm text-emerald-700 dark:text-emerald-300">策略已保存。</p>}
-    {confirmAccount && <p role="alert" className="rounded-lg border border-amber-300 p-3 text-xs text-amber-800 dark:text-amber-200">更改账户默认将影响继承它的主 Token 和子 Token{value.following_token_count !== undefined ? `（当前 ${value.following_token_count} 个）` : ""}；独立 Token 不继承账户默认的路由与 scope 字段，但仍受管理员账户授权上限约束。请确认影响后保存。</p>}
+    {confirmAccount && <p role="alert" className="rounded-lg border border-amber-300 p-3 text-xs text-amber-800 dark:text-amber-200">更改账户默认将影响继承它的主 Token 和子 Token{value.following_token_count !== undefined ? `（当前 ${value.following_token_count} 个）` : ""}；已单独设置的 Token 不受影响。请确认影响后保存。</p>}
     <div className="flex flex-wrap gap-2">
       <Button type="submit" size="sm" disabled={locked || !changed || !!validation}>{busy ? "保存中…" : confirmAccount ? "确认更改账户默认" : "保存策略"}</Button>
       {confirmAccount && <Button type="button" size="sm" variant="secondary" disabled={busy} onClick={() => setConfirmAccount(false)}>返回修改</Button>}

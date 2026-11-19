@@ -18,6 +18,7 @@ let fetchMock: ReturnType<typeof vi.fn>;
 const response = (item: Record<string, unknown> = { provisional: "inspect server result", ok: true, status: "verified", enabled: true, scanned: 1, deleted: 1, next: { createdAt: 7200000, id: 999 } }) =>
   new Response(JSON.stringify({ item }), { status: 200, headers: { "Content-Type": "application/json" } });
 beforeEach(() => {
+  vi.stubGlobal("window", { location: { pathname: "/admin-prefix-example/usage" } });
   const storage = new Map<string, string>();
   vi.stubGlobal("sessionStorage", { getItem: (key: string) => storage.get(key) ?? null, setItem: (key: string, value: string) => storage.set(key, value), removeItem: (key: string) => storage.delete(key) });
   fetchMock = vi.fn(async () => response()); vi.stubGlobal("fetch", fetchMock);
@@ -123,7 +124,7 @@ describe("retention admin API body serialization", () => {
     await usageRetentionApi.status(); await usageRetentionApi.backfill(); await usageRetentionApi.verify();
     await usageRetentionApi.preview({ before: batch.before, limit: 100 });
     await usageRetentionApi.cleanup({ ...batch, after: { ...batch.after, token: "never-forward" }, token: "never-forward", enabled: false }, true, "ui-op");
-    expect(fetchMock.mock.calls.map(call => call[0])).toEqual(["status", "backfill", "verify", "preview", "cleanup"].map(name => "/api/usage-retention/" + name));
+    expect(fetchMock.mock.calls.map(call => call[0])).toEqual(["status", "backfill", "verify", "preview", "cleanup"].map(name => "/admin-prefix-example/api/usage-retention/" + name));
     expect(fetchMock.mock.calls.map(call => call[1].body)).toEqual([undefined, '{"limit":500}', '{}', JSON.stringify({ before: batch.before, limit: 100 }), JSON.stringify({ enabled: true, ...batch, confirm: "DELETE_USAGE_DETAILS", operation_id: "ui-op" })]);
     for (const [, init] of fetchMock.mock.calls) {
       expect(init.credentials).toBe("include");
@@ -232,7 +233,7 @@ describe("retention real hook/event safety without a browser DOM", () => {
     expect(h.button("预览此批（不删除）").props!.disabled).toBe(true);
     expect(h.button("确认清理一批").props!.disabled).toBe(true);
     await h.click("预览此批（不删除）"); h.check(1); await h.click("确认清理一批");
-    expect(fetchMock.mock.calls.map(call => call[0])).toEqual(["verify", "preview", "verify"].map(name => "/api/usage-retention/" + name));
+    expect(fetchMock.mock.calls.map(call => call[0])).toEqual(["verify", "preview", "verify"].map(name => "/admin-prefix-example/api/usage-retention/" + name));
     expect(h.text()).not.toContain("结果未知");
   });
   it("cleanup is one batch, clears confirmation, and never advances the provisional cursor", async () => {

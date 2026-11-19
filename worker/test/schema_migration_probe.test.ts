@@ -88,7 +88,9 @@ describe("schema migration probe", () => {
       const { ensureSchema } = await freshSchemaModule();
       await ensureSchema({ DB } as never);
       const stages = batches.filter(sqls => sqls[0]?.startsWith("INSERT INTO cpg_schema_versions"));
-      expect(stages).toHaveLength(11);
+      expect(stages).toHaveLength(12);
+      expect(stages[11]).toContain("CREATE INDEX IF NOT EXISTS idx_video_tasks_created_id ON video_tasks(created_at DESC, id DESC)");
+      expect(stages[11]).toContain("CREATE INDEX IF NOT EXISTS idx_audit_logs_action_created_id ON audit_logs(action, created_at DESC, id DESC)");
       expect(stages[10]).toContain("ALTER TABLE video_tasks ADD COLUMN upstream_usage_json TEXT");
       expect(stages[5].some(sql => sql.includes("monthly_pass_operations"))).toBe(true);
       expect(stages[6].some(sql => sql.includes("monthly_pass_operation_apply"))).toBe(true);
@@ -100,6 +102,7 @@ describe("schema migration probe", () => {
       expect(stages[3]).toContain("ALTER TABLE billing_requests ADD COLUMN monthly_groups_json TEXT");
       expect(stages[4].some(sql => /^CREATE TRIGGER IF NOT EXISTS monthly_pass_admit/.test(sql))).toBe(true);
       expect(d1.rows("SELECT id, completed FROM cpg_schema_versions ORDER BY id")).toEqual([
+        { id: "admin-record/0001-query-indexes", completed: 1 },
         { id: "core/0001-tables", completed: 1 },
         { id: "core/0002-columns", completed: 1 },
         { id: "core/0003-ready", completed: 1 },

@@ -18,6 +18,12 @@ export default defineConfig({
     proxy: {
       "/api": "http://localhost:8787",
       "/v1": "http://localhost:8787",
+      "/console": {
+        target: "http://127.0.0.1:8787",
+        bypass(req) {
+          if (req.headers.accept?.includes("text/html") && /^\/console\/?$/.test(req.url || "")) return req.url;
+        },
+      },
     },
   },
 });

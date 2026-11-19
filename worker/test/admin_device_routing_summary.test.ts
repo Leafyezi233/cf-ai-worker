@@ -1,0 +1,20 @@
+import { afterEach, expect, it } from "vitest";
+import { devicesApp } from "../src/admin/devices";
+import { ensureSchema } from "../src/db/schema";
+import { makeEnv, seedDevice } from "./helpers/realGatewayEnv";
+import { createRealD1, type RealD1 } from "./helpers/realD1";
+const databases:RealD1[]=[];afterEach(()=>databases.splice(0).forEach(db=>db.close()));
+it("opt-in master summaries add one bulk SELECT and never expose full policies or credentials",async()=>{
+ const db=createRealD1();databases.push(db);const env=makeEnv(db);await ensureSchema(env);
+ await seedDevice(db,{id:"one",token_hash:"one"});await seedDevice(db,{id:"two",token_hash:"two"});await seedDevice(db,{id:"three",token_hash:"three"});
+ db.sql("INSERT INTO service_groups (id,name) VALUES ('cheap','低价池')");
+ db.sql("UPDATE devices SET service_group_id='cheap' WHERE id='one'");
+ db.sql("UPDATE devices SET service_group_id='auto' WHERE id='two'");
+ db.sql("INSERT INTO token_routing_policies (device_id,token_id,policy_json,updated_at) VALUES ('one','master',?,1)",JSON.stringify({mode:"multi",group_ids:["cheap","extra"],model_overrides:{sensitive:"value"}}));
+ db.sql("INSERT INTO token_routing_policies (device_id,token_id,policy_json,updated_at) VALUES ('two','sub',?,1)",JSON.stringify({mode:"fixed",group_ids:["sub-only"]}));
+ const sql:string[]=[];const prepare=env.DB.prepare.bind(env.DB);env.DB.prepare=((q:string)=>{sql.push(q);return prepare(q);}) as typeof env.DB.prepare;
+ const old=await devicesApp.request("http://local/",{},env);expect(old.status).toBe(200);const oldBody=await old.json() as any;const oldCount=sql.length;expect(oldBody.items[0]).not.toHaveProperty("routing_policy_mode");
+ sql.length=0;const res=await devicesApp.request("http://local/?include_routing=1",{},env);expect(res.status).toBe(200);const data=await res.json() as any;expect(sql).toHaveLength(oldCount+1);
+ const one=data.items.find((x:any)=>x.id==="one");expect(one).toMatchObject({routing_policy_mode:"multi",routing_group_ids:["cheap","extra"],selected_service_group_name:"低价池"});expect(data.items.find((x:any)=>x.id==="two").routing_policy_mode).toBe("auto");expect(data.items.find((x:any)=>x.id==="three").routing_policy_mode).toBe("legacy");
+ for(const item of data.items)for(const key of ["token_hash","password_hash","policy_json","model_overrides"])expect(item).not.toHaveProperty(key);
+});

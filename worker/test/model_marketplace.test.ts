@@ -11,6 +11,7 @@ import {
 import type { ServiceGroupInput, ServiceGroupModelInput } from "../src/db/service_groups";
 import type { Env } from "../src/types";
 import { sha256Hex } from "../src/utils/crypto";
+import { ensureTokenPoliciesSchema } from "../src/db/token_policies";
 import { createRealD1, type RealD1 } from "./helpers/realD1";
 import {
   DEVICE_ID, TOKEN, makeEnv, seedDevice, seedDeviceGroups, seedDeviceModels,
@@ -54,6 +55,11 @@ function map(groupId: string, extra: Partial<ServiceGroupModelInput> = {}) {
 function assign(selected: string | null, fallback: string | null = null) {
   d1.sql("UPDATE devices SET service_group_id = ?, default_service_group_id = ? WHERE id = ?",
     selected, fallback, DEVICE_ID);
+}
+async function setMasterPolicy(policy: Record<string, unknown>) {
+  await ensureTokenPoliciesSchema(env);
+  d1.sql("INSERT INTO token_routing_policies (device_id, token_id, policy_json, revision, updated_at) VALUES (?, ?, ?, 1, 1)",
+    DEVICE_ID, "master", JSON.stringify({ mode: "auto", group_ids: [], selection: "ordered", failure_fallback: false, model_overrides: {}, model_scope: null, ...policy }));
 }
 async function subToken(id: string, selected: string | null = null) {
   const token = "marketplace-token-" + id;
@@ -155,6 +161,8 @@ describe("GET /console/model-marketplace", () => {
     const items = await offers();
     expect(items).toHaveLength(2);
     expect(items.filter(item => item.is_current).map(item => item.service_group_id)).toEqual([current.id]);
+    const body = await (await request()).json() as { routing: Record<string, unknown> };
+    expect(body.routing).toMatchObject({ mode: "fixed", fixed_group_id: current.id, fixed_group_name: "retired" });
   });
 
   it("withdraws private offers immediately after grant removal even when the group is selected", async () => {
@@ -202,8 +210,21 @@ describe("GET /console/model-marketplace", () => {
       expect.objectContaining({ model_name: "shared-model", service_group_id: available.id, is_current: false }),
     ]));
     expect(items.filter(item => item.service_group_id === null).length).toBeGreaterThan(0);
+    const legacyBody = await (await request()).json() as { routing: Record<string, unknown> };
+    expect(legacyBody.routing).toMatchObject({ mode: "legacy", fixed_group_id: null, fixed_group_name: null });
     assign(available.id);
     expect((await offers()).every(item => item.service_group_id !== null)).toBe(true);
+  });
+
+  it.each(["auto", "multi"] as const)("returns routing context without a unique current group for %s", async mode => {
+    const first = await group("first"), second = await group("second");
+    await map(first.id); await map(second.id);
+    assign(first.id);
+    await setMasterPolicy({ mode, group_ids: mode === "multi" ? [first.id, second.id] : [], selection: "ordered" });
+    const res = await request();
+    const body = await res.json() as { routing: Record<string, unknown>; items: Offer[] };
+    expect(body.routing).toMatchObject({ mode, selection: "ordered", fixed_group_id: null, fixed_group_name: null });
+    expect(body.items.every(item => !item.is_current)).toBe(true);
   });
 
   it("intersects original model scope rather than authorizing a target through its internal member", async () => {

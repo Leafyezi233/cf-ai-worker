@@ -35,9 +35,13 @@ describe("ConsoleTokenPolicies SSR and pure request helpers (not browser E2E)", 
     expect(policyTargets(tokens)).toEqual([{ id: "account", label: "账户默认" }, { id: "master", label: "主 Token" },
       { id: "live", label: "子 Token · 研发" }, { id: "unnamed", label: "子 Token · unnamed" }]);
     const html = renderToStaticMarkup(createElement(ConsoleTokenPolicies, { tokens }));
-    expect(html).toContain('aria-label="策略编辑对象"'); expect(html).toContain('value="account" selected=""');
+    expect(html).toContain('aria-label="策略编辑对象"'); expect(html).toContain('<option value="" selected="">请选择编辑对象…</option>');
     expect(html).toContain('value="master"'); expect(html).toContain('value="live"'); expect(html).not.toContain('value="dead"');
-    expect(html).toContain("不调用上游、不计费、不占生成 RPM"); expect(html).toContain("真实请求仍重查");
+    expect(html).toContain("选择后将在下方展开该对象的设置。");
+    expect(html).not.toContain("策略来源"); expect(html).toContain("只读路由解析预览");
+    expect(html).toContain('aria-label="路由预览对象"');
+    expect(html).toContain("请选择预览对象…");
+    expect(html).not.toContain('aria-label="预览公开调用名"');
     expect(fetcher).not.toHaveBeenCalled();
   });
   it("maps stable scope keys, compatible names and group availability to the final editor contract", () => {
@@ -47,7 +51,7 @@ describe("ConsoleTokenPolicies SSR and pure request helpers (not browser E2E)", 
     expect(options).toEqual([{ key: "public:identity-1", label: "公开模型", compatible_name: "compatible-name", group_ids: ["g2", "g1"] }]);
     expect(options[0].group_ids).not.toBe(data.models[0].group_ids);
     expect(policyScopeOptions([{ scope_key: "model:private", model_name: "raw-name", group_ids: [] }])[0].label).toBe("raw-name");
-    const html = renderToStaticMarkup(createElement(TokenPolicyEditor, { target: "account", value: data, groups: data.groups,
+    const html = renderToStaticMarkup(createElement(TokenPolicyEditor, { target: "account", value: { ...data, policy: data.effective_policy }, groups: data.groups,
       scopeOptions: options, onSave: vi.fn() }));
     expect(html).toContain("公开模型"); expect(html).toContain("调用名：compatible-name");
     expect(html).toContain("account:2/master:3"); expect(html).toContain("4"); expect(html).toContain("账户默认");

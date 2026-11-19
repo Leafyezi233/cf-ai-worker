@@ -23,7 +23,7 @@ import { ConsoleVideoCard } from "../components/ConsoleVideoCard";
 import { ConsoleStandardVideoCard } from "../components/ConsoleStandardVideoCard";
 import ConsoleMonthlyPass from "../components/ConsoleMonthlyPass";
 import { ConsoleAuthShell, ConsoleContact } from "../components/ConsoleAuthShell";
-import { ConsoleNavigation, ConsoleSectionIntro } from "../components/ConsoleNavigation";
+import { ConsoleNavigation, ConsoleSectionIntro, useConsoleSection } from "../components/ConsoleNavigation";
 
 const RANGES = [
   { key: "24h", label: "近 24 小时" },
@@ -123,7 +123,9 @@ export function TokenGate({ onSaved }: { onSaved: () => void }) {
 export default function ConsolePage() {
   const [token, setToken] = useState(getConsoleToken());
   const [range, setRange] = useState<string>("30d");
-  const [tab, setTab] = useState<"overview" | "models" | "guide" | "video">("overview");
+  const [tab, setTab] = useConsoleSection();
+  const [accountSection, setAccountSection] = useState<"keys" | "security" | null>(null);
+  useEffect(() => { if (tab === "keys" || tab === "security") setAccountSection(tab); }, [tab]);
   const [offset, setOffset] = useState(0);
 
   useEffect(() => {
@@ -144,36 +146,32 @@ export default function ConsolePage() {
     { enabled: Boolean(token), ttlMs: 0 }
   );
 
+  const authenticated = Boolean(token && sessionQuery.data?.authenticated);
+  const needsModels = tab === "guide" || tab === "video";
   const meQuery = useQuery<ConsoleMe>(token ? `console:${scope}:me` : null, () => fetcher("/console/me"), {
     enabled: Boolean(token),
   });
   const quotaQuery = useQuery<ConsoleQuota>(token ? `console:${scope}:quota` : null, () => fetcher("/console/quota"), {
-    enabled: Boolean(token),
+    enabled: authenticated && (tab === "overview" || tab === "usage"),
     ttlMs: 15_000,
   });
   const usageQuery = useQuery<ConsoleUsage>(
     token ? `console:${scope}:usage:${range}:${offset}` : null,
     () => fetcher(`/console/usage?range=${range}&limit=50&offset=${offset}`),
-    { enabled: Boolean(token) }
+    { enabled: authenticated && tab === "usage" }
   );
-  const usageDaily = usageQuery.data?.daily || [];
-  const localToday = new Date().toISOString().slice(0, 10);
-  const todayBucket =
-    usageDaily.find((d) => d.date === localToday) ?? (usageDaily.length ? usageDaily[usageDaily.length - 1] : null);
-  const todayCost = todayBucket?.cost_usd ?? 0;
-  const todayCostIsExact = Boolean(todayBucket && todayBucket.date === localToday);
   const modelsQuery = useQuery<ConsoleModels>(token ? `console:${scope}:models` : null, () => fetcher("/console/models"), {
-    enabled: Boolean(token),
+    enabled: authenticated && needsModels,
   });
   const marketplaceQuery = useQuery<ConsoleModelMarketplace>(
     token ? `console:${scope}:model-marketplace` : null,
     () => fetcher("/console/model-marketplace"),
-    { enabled: Boolean(token) }
+    { enabled: authenticated && tab === "models" }
   );
   const announcementQuery = useQuery<ConsoleAnnouncement>(
     token ? "console:announcement" : null,
     () => fetcher("/console/announcement"),
-    { enabled: Boolean(token), ttlMs: 30_000 }
+    { enabled: authenticated && tab === "overview", ttlMs: 30_000 }
   );
 
   if (!token) return <TokenGate onSaved={() => setToken(getConsoleToken())} />;
@@ -263,6 +261,7 @@ export default function ConsolePage() {
             {me?.name || "正在读取账户"}
           </div>
         </div>
+        <div className="p-3"><ConsoleNavigation active={tab} onChange={setTab} vertical /></div>
         <div className="p-4 space-y-2 text-xs text-slate-500 dark:text-slate-400">
           <div>设备 ID</div>
           <div className="font-mono text-[11px] break-all text-slate-700 dark:text-slate-300">{me?.id || "-"}</div>
@@ -286,13 +285,18 @@ export default function ConsolePage() {
             </div>
             <div className="flex flex-wrap items-center gap-1">
               <Button variant="ghost" size="sm" onClick={() => {
-                meQuery.refresh(true); quotaQuery.refresh(true); usageQuery.refresh(true);
-                modelsQuery.refresh(true); marketplaceQuery.refresh(true); announcementQuery.refresh(true);
+                const requests: Promise<unknown>[] = [meQuery.refresh(true)];
+                if (tab === "overview" || tab === "usage") requests.push(quotaQuery.refresh(true));
+                if (tab === "usage") requests.push(usageQuery.refresh(true));
+                if (needsModels) requests.push(modelsQuery.refresh(true));
+                if (tab === "models") requests.push(marketplaceQuery.refresh(true));
+                if (tab === "overview") requests.push(announcementQuery.refresh(true));
+                void Promise.allSettled(requests);
               }}>刷新数据</Button>
               <Button variant="ghost" size="sm" className="md:hidden" onClick={logout}>退出 / 更换 Token</Button>
             </div>
           </div>
-          <ConsoleNavigation active={tab} onChange={setTab} />
+          <div className="md:hidden"><ConsoleNavigation active={tab} onChange={setTab} /></div>
         </header>
 
         <main id="console-main" className="mx-auto w-full max-w-7xl flex-1 space-y-5 p-4 sm:p-6">
@@ -303,19 +307,19 @@ export default function ConsolePage() {
             <ConsoleVideoCard key={token} token={token} models={modelsQuery.data ?? null} active={tab === "video"} />
           </div>
           {tab === "guide" ? (
-            <ConsoleGuide models={modelsQuery.data} onOpenModels={() => setTab("models")} />
+            <><ConsoleGuide models={modelsQuery.data} onOpenModels={() => setTab("models")} onOpenKeys={() => setTab("keys")} /><ConsoleChatCard models={models || null} /></>
           ) : tab === "models" ? (
             <ConsoleModelsSquare
               models={marketplaceQuery.data}
               loading={marketplaceQuery.loading}
               error={marketplaceQuery.error}
             />
-          ) : tab === "video" ? null : (
+          ) : tab === "video" || tab === "keys" || tab === "security" ? null : (
             <>
           { 
 
 }
-          {announcementQuery.data?.enabled && announcementQuery.data.message ? (
+          {tab === "overview" && announcementQuery.data?.enabled && announcementQuery.data.message ? (
             <AnnouncementBanner notice={announcementQuery.data} />
           ) : null}
 
@@ -325,6 +329,7 @@ export default function ConsolePage() {
             </Card>
           ) : null}
 
+          {tab === "overview" ? <><Card title="快速开始"><div className="flex flex-wrap gap-2"><Button onClick={() => setTab("models")}>选择模型</Button><Button variant="secondary" onClick={() => setTab("keys")}>创建 API 密钥</Button><Button variant="secondary" onClick={() => setTab("guide")}>配置客户端</Button><Button variant="ghost" onClick={() => setTab("usage")}>查看用量与账单</Button></div></Card>
           <section aria-labelledby="console-balance-heading" className="space-y-3">
             <div><h3 id="console-balance-heading" className="font-semibold text-slate-900 dark:text-slate-100">余额与额度</h3>
               <p className="mt-1 text-sm leading-6 text-slate-500 dark:text-slate-400">钱包余额与月卡额度分开管理；用量花费不等同于钱包扣款。</p></div>
@@ -334,14 +339,15 @@ export default function ConsolePage() {
                 hint={quota && quota.reserved_usd > 0 ? `预占中 ${fmtUsd(quota.reserved_usd)}（进行中请求暂时保留的金额）` : undefined}>
                 <ConsoleContact balance />
               </Stat>
-              <Stat label="今日消费" value={usage ? fmtUsd(todayCost) : "—"}
-                hint={todayCostIsExact ? "按服务端统计日期" : "按服务端日期，取最近一天"} />
+              <Stat label="请求预占金额" value={quota ? fmtUsd(quota.reserved_usd) : "—"} hint="进行中请求暂时保留的金额，不是已结算花费" />
               <Stat label="本月花费" value={quota ? fmtUsd(quota.monthly_cost_usd) : "—"}
                 hint={quota ? quota.monthly_cost_limit_usd > 0 ? `上限 ${fmtUsd(quota.monthly_cost_limit_usd)}` : "未设置上限" : "等待读取额度"} />
             </div>
           </section>
+          <ConsoleMonthlyPass scope={scope} onChange={() => { void quotaQuery.refresh(true).catch(() => {}); }} />
+          </> : null}
 
-          <section aria-labelledby="console-usage-heading" className="space-y-3">
+          {tab === "usage" ? <section aria-labelledby="console-usage-heading" className="space-y-3">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div><h3 id="console-usage-heading" className="font-semibold text-slate-900 dark:text-slate-100">用量统计 · {RANGES.find(r => r.key === range)?.label}</h3>
                 <p className="mt-1 text-sm leading-6 text-slate-500 dark:text-slate-400">以下汇总、按模型用量和请求明细使用同一时间范围，不影响本月额度。</p></div>
@@ -359,7 +365,7 @@ export default function ConsolePage() {
               <Stat label="输入 Token" value={usage ? fmtInt(usage.summary.input_tokens) : "—"} />
               <Stat label="输出 Token" value={usage ? fmtInt(usage.summary.output_tokens) : "—"} />
             </div>
-          </section>
+          </section> : null}
 
           {quota?.low_balance_warning ? (
             <div className="rounded-xl border border-amber-200 dark:border-amber-900/60 bg-amber-50 dark:bg-amber-950/30 px-4 py-3 text-sm text-amber-700 dark:text-amber-300">
@@ -384,26 +390,11 @@ export default function ConsolePage() {
           {me && me.calls_enabled === false ? (
             <div className="rounded-xl border border-rose-200 dark:border-rose-900/60 bg-rose-50 dark:bg-rose-950/30 px-4 py-3 text-sm text-rose-700 dark:text-rose-300">
               主 Token 当前处于「禁止调用」状态，网关会拒绝新请求（子 Token 不受影响）。
-              在下方「Token 管理」里可以自行恢复。
+              在「账户与安全」里可以自行恢复。
             </div>
           ) : null}
 
-          <ConsoleMonthlyPass scope={scope} onChange={() => { void quotaQuery.refresh(true).catch(() => {}); }} />
-
-          <AccountPanel
-            scope={scope}
-            onServiceGroupsChange={() => {
-              void meQuery.refresh(true).catch(() => {});
-              void modelsQuery.refresh(true).catch(() => {});
-              void marketplaceQuery.refresh(true).catch(() => {});
-            }}
-            onCallsChange={() => {
-              meQuery.refresh(true);
-            }}
-          />
-
-          <ConsoleChatCard models={models || null} />
-
+          {tab === "usage" ? <>
           <Card title="按模型用量">
             <p className="mb-3 text-xs leading-5 text-slate-500 dark:text-slate-400">统计范围：{RANGES.find(r => r.key === range)?.label}。Token 为用量单位，花费以各模型计价规则为准。</p>
             {usageQuery.loading ? (
@@ -510,8 +501,26 @@ export default function ConsolePage() {
               </div>
             </div>
           </Card>
+          </> : null}
             </>
           )}
+          {(accountSection || tab === "keys" || tab === "security") ? <div hidden={tab !== "keys" && tab !== "security"}>
+          <AccountPanel
+            scope={scope}
+            active={tab === "keys" || tab === "security"}
+            section={tab === "security" || tab === "keys" ? tab : accountSection ?? "keys"}
+            onOpenGuide={() => setTab("guide")}
+            onServiceGroupsChange={() => {
+              void meQuery.refresh(true).catch(() => {});
+              void modelsQuery.refresh(true).catch(() => {});
+              void marketplaceQuery.refresh(true).catch(() => {});
+            }}
+            onCallsChange={() => {
+              meQuery.refresh(true);
+            }}
+          />
+
+          </div> : null}
         </main>
       </div>
     </div>

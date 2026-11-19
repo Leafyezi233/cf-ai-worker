@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { adminPrefix } from "../utils/admin-path";
 import type { Env } from "../types";
 import { listProviders, getSetting, setSetting, getCurrentMonthSpend } from "../db/repo";
 import { sendWebhookNotification, type WebhookConfig } from "../utils/webhook";
@@ -144,7 +145,7 @@ settingsApp.get("/retention", async (c) => {
     enabled: false,
     automatic_cleanup: false,
     legacy_configuration_ignored: Boolean(cfg.enabled),
-    maintenance_endpoint: "/api/usage-retention",
+    maintenance_endpoint: (adminPrefix(c.env) ?? "") + "/api/usage-retention",
     retention_days: retentionDays,
     keep_daily_stats: cfg.keep_daily_stats !== false,
     allowed_days: RETENTION_DAYS_CHOICES,
@@ -154,11 +155,11 @@ settingsApp.get("/retention", async (c) => {
 
 settingsApp.put("/retention", (c) => c.json({
   ok: false, error: "usage_retention_requires_verified_preview", automatic_cleanup: false,
-  maintenance_endpoint: "/api/usage-retention",
+  maintenance_endpoint: (adminPrefix(c.env) ?? "") + "/api/usage-retention",
 }, 410));
 settingsApp.post("/retention/cleanup", (c) => c.json({
   ok: false, error: "usage_retention_requires_verified_preview", automatic_cleanup: false,
-  maintenance_endpoint: "/api/usage-retention",
+  maintenance_endpoint: (adminPrefix(c.env) ?? "") + "/api/usage-retention",
 }, 410));
 
 

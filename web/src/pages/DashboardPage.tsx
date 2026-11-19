@@ -7,6 +7,9 @@ import { IconActivity, IconZap, IconTerminal, IconShield } from "../components/i
 import { LiveLogViewer } from "../components/LiveLogViewer";
 import { useQuery } from "../hooks/useQuery";
 import { useTheme } from "../hooks/useTheme";
+import { Link } from "react-router-dom";
+import { useAdminFilters } from "../hooks/useAdminFilters";
+import { Select } from "../components/ui";
 
 interface DashboardData {
   stats: Record<string, StatsResponse>;
@@ -14,24 +17,35 @@ interface DashboardData {
   cacheStats: CacheAnalyticsResponse;
   modelLatency: ModelLatencyItem[];
   gatewayUrl: string;
+  failedSections: string[];
 }
 
 export default function DashboardPage() {
   const { resolvedTheme } = useTheme();
   const isDark = resolvedTheme === "dark";
   const [showLiveStream, setShowLiveStream] = useState(false);
+  const [filters, setFilter] = useAdminFilters({ range: "today" });
+  const range = ["today", "7d", "30d"].includes(filters.range) ? filters.range : "today";
+  const rangeLabel = range === "today" ? "今日" : range === "7d" ? "近7日" : "近30日";
 
   const fetchDashboard = useCallback(async (): Promise<DashboardData> => {
+    const statsRequests = new Map<string, Promise<StatsResponse>>();
+    const statsRequest = (r: string) => {
+      if (!statsRequests.has(r)) statsRequests.set(r, api.get<StatsResponse>(`/api/usage/stats?range=${r}`));
+      return statsRequests.get(r)!;
+    };
     const [todayRes, d7Res, d30Res, usageRes, cacheRes, latencyRes, settingsRes] = await Promise.allSettled([
-      api.get<StatsResponse>("/api/usage/stats?range=today"),
-      api.get<StatsResponse>("/api/usage/stats?range=7d"),
-      api.get<StatsResponse>("/api/usage/stats?range=30d"),
+      statsRequest(range),
+      statsRequest("7d"),
+      statsRequest("30d"),
       api.get<{ items: UsageItem[] }>("/api/usage?limit=8"),
-      api.get<CacheAnalyticsResponse>("/api/usage/cache-stats?range=today"),
-      api.get<{ items: ModelLatencyItem[] }>("/api/usage/model-latency?range=today"),
+      api.get<CacheAnalyticsResponse>(`/api/usage/cache-stats?range=${range}`),
+      api.get<{ items: ModelLatencyItem[] }>(`/api/usage/model-latency?range=${range}`),
       api.get<{ gateway_base_url: string }>("/api/settings"),
     ]);
 
+    if (todayRes.status === "rejected") throw todayRes.reason;
+    const failedSections = [d7Res, d30Res, usageRes, cacheRes, latencyRes, settingsRes].flatMap((result, index) => result.status === "rejected" ? [["7日统计", "30日统计", "最近日志", "缓存统计", "模型延迟", "接入地址"][index]] : []);
     const emptyStats: StatsResponse = {
       range: "today",
       since: Date.now(),
@@ -66,10 +80,11 @@ export default function DashboardPage() {
       cacheStats,
       modelLatency,
       gatewayUrl: settings.gateway_base_url || window.location.origin,
+      failedSections,
     };
-  }, []);
+  }, [range]);
 
-  const { data, loading } = useQuery("dashboard-data", fetchDashboard, { ttlMs: 30_000 });
+  const { data, loading, error, isRefreshing, refresh, updatedAt } = useQuery(`dashboard-data:${range}`, fetchDashboard, { ttlMs: 30_000, revalidateIfFresh: false });
 
   if (loading && !data) return <Spinner text="正在加载网关统计…" />;
 
@@ -85,6 +100,14 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-4 sm:space-y-6">
+      <div className="flex flex-wrap items-center gap-2">
+        <Select aria-label="仪表盘统计范围" className="!w-auto" value={range} onChange={e => setFilter("range", e.target.value)}><option value="today">今日</option><option value="7d">近7日</option><option value="30d">近30日</option></Select>
+        <Button disabled={loading || isRefreshing} onClick={() => void refresh(true).catch(() => {})}>{isRefreshing ? "刷新中…" : "刷新统计"}</Button>
+        <Link className="text-sm text-blue-600" to={`/usage?list_range=${range}`}>查看对应范围用量</Link>
+        <span className="text-xs text-slate-500">{rangeLabel}统计 · 浏览器时区 {Intl.DateTimeFormat().resolvedOptions().timeZone} · {updatedAt ? `更新于 ${fmtTime(updatedAt)}` : "尚未成功更新"}；趋势固定近7日，最近日志为全站最新8条</span>
+      </div>
+      {error ? <p role="alert" className="text-sm text-red-600">统计读取失败：{error.message}。{data ? "保留上次成功数据，并非当前实时结果。" : "尚无成功数据，以下零值不代表实际用量。"}</p> : null}
+      {data?.failedSections.length ? <p role="alert" className="text-sm text-amber-600">部分区域读取失败：{data.failedSections.join("、")}；对应空值不表示实际为零，请重试。</p> : null}
       { }
       <div className="p-3.5 sm:p-4 rounded-2xl bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 text-white shadow-lg shadow-blue-500/15 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4">
         <div className="flex items-center gap-3 min-w-0">
@@ -105,7 +128,7 @@ export default function DashboardPage() {
       { }
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2.5 sm:gap-4">
         <StatCard
-          label="今日总请求"
+          label={`${rangeLabel}总请求`}
           value={fmtNum(t.request_count)}
           sub={`错误率 ${t.request_count ? ((t.error_count / t.request_count) * 100).toFixed(1) : 0}%`}
           tone="blue"
@@ -117,25 +140,25 @@ export default function DashboardPage() {
           tone="purple"
         />
         <StatCard
-          label="今日输入 Token"
+          label={`${rangeLabel}输入 Token`}
           value={fmtNum(t.input_tokens)}
           sub={`占比 ${t.total_tokens ? Math.round((t.input_tokens / t.total_tokens) * 100) : 0}%`}
           tone="slate"
         />
         <StatCard
-          label="今日输出 Token"
+          label={`${rangeLabel}输出 Token`}
           value={fmtNum(t.output_tokens)}
           sub={`占比 ${t.total_tokens ? Math.round((t.output_tokens / t.total_tokens) * 100) : 0}%`}
           tone="slate"
         />
         <StatCard
-          label="今日总 Token"
+          label={`${rangeLabel}总 Token`}
           value={fmtNum(t.total_tokens)}
           sub={`7日 ${fmtNum(stats.d7?.summary?.total_tokens || 0)}`}
           tone="green"
         />
         <StatCard
-          label="今日预估费用"
+          label={`${rangeLabel}预估费用`}
           value={`¥${(t.cost_usd || 0).toFixed(3)}`}
           sub={`30日 ¥${(stats.d30?.summary?.cost_usd || 0).toFixed(2)}`}
           tone="slate"
@@ -259,11 +282,11 @@ export default function DashboardPage() {
 
       { }
       <div className="grid gap-4 sm:gap-6 lg:grid-cols-2">
-        <Card title="今日 Provider 分布">
+        <Card title={`${rangeLabel} Provider 分布`}>
           <BreakdownTable rows={providerRows} />
         </Card>
 
-        <Card title="今日 Model 使用分布">
+        <Card title={`${rangeLabel} Model 使用分布`}>
           <BreakdownTable rows={modelRows} />
         </Card>
       </div>

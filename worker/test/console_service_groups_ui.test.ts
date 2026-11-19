@@ -25,13 +25,13 @@ function render() {
 describe("console service-group clarity (SSR)", () => {
   it("distinguishes effective choices from inheritance and legacy routing", () => {
     const text = render();
-    expect(text).toContain("账户默认 · 当前生效蓝组");
-    expect(text).toContain("主 Token · 当前生效蓝组继承账户默认");
-    expect(text).toContain("子 Token · 继承子令牌 · 当前生效蓝组继承账户默认");
-    expect(text).toContain("子 Token · 旧版子令牌 · 当前生效旧版默认路由使用此子 Token 的独立选择");
+    expect(text).toContain("账户默认 · 当前值蓝组");
+    expect(text).toContain("主 Token · 有效配置蓝组继承账户默认");
+    expect(text).toContain("子 Token · 继承子令牌 · 有效配置蓝组继承账户默认");
+    expect(text).toContain("子 Token · 旧版子令牌 · 有效配置旧版默认路由使用此子 Token 的独立选择");
     expect(text).toContain("更改账户默认");
     expect(text).toContain("只读");
-    expect(text).toContain("失败时可能改用下一候选");
-    expect(text).toContain("费用按成功使用的分组计算");
+    expect(text).toContain("自动路由的候选顺序与失败切换由令牌策略决定");
+    expect(text).toContain("实际费用按请求命中的分组与价格计算");
   });
 });

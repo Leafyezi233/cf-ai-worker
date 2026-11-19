@@ -75,9 +75,18 @@ serviceGroupsApp.get("/", async (c) => {
     c.env.DB.prepare("SELECT device_id, service_group_id FROM device_service_groups ORDER BY device_id")
       .all<{ device_id: string; service_group_id: string }>(),
   ]);
+  const modelsByGroup = new Map<string, MappingRow[]>();
+  const accountsByGroup = new Map<string, string[]>();
+  for (const mapping of mappings.results ?? []) {
+    const rows = modelsByGroup.get(mapping.service_group_id) ?? [];
+    rows.push(mapping); modelsByGroup.set(mapping.service_group_id, rows);
+  }
+  for (const grant of grants.results ?? []) {
+    const rows = accountsByGroup.get(grant.service_group_id) ?? [];
+    rows.push(grant.device_id); accountsByGroup.set(grant.service_group_id, rows);
+  }
   return c.json({ items: (groups.results ?? []).map((group) => ({
-    ...group, models: (mappings.results ?? []).filter((m) => m.service_group_id === group.id),
-    device_ids: (grants.results ?? []).filter((g) => g.service_group_id === group.id).map((g) => g.device_id),
+    ...group, models: modelsByGroup.get(group.id) ?? [], device_ids: accountsByGroup.get(group.id) ?? [],
   })) });
 });
 serviceGroupsApp.post("/", async (c) => {

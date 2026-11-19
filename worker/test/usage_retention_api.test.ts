@@ -7,11 +7,11 @@ import { createRealD1, type RealD1 } from "./helpers/realD1";
 import { makeEnv, seedDevice } from "./helpers/realGatewayEnv";
 import { resetRateLimitMemory } from "../src/gateway/ratelimit";
 import { resetIpRateLimitMemory } from "../src/middleware/ipRateLimit";
-const H=3600000, BASE="/api/usage-retention";
+const H=3600000, BASE="/admin-prefix-example/api/usage-retention";
 let d:RealD1, env:Env, cookie:string;
 beforeEach(async()=>{ resetRateLimitMemory(); resetIpRateLimitMemory(); d=createRealD1(); env={...makeEnv(d),SESSION_SECRET:"retention-api-local-secret",ADMIN_SECRET:"local-admin"}; await ensureSchema(env); await seedDevice(d); cookie=buildSessionCookie(await signSession(env.SESSION_SECRET!)).split(";")[0]; });
 afterEach(()=>d.close());
-function req(path:string,method="GET",body?:unknown,headers:Record<string,string>={cookie}){return app.request("https://retention.test"+BASE+path,{method,headers:{"content-type":"application/json",...headers},...(body===undefined?{}:{body:JSON.stringify(body)})},env);}
+function req(path:string,method="GET",body?:unknown,headers:Record<string,string>={cookie}){return app.request("https://retention.test"+BASE+path,{method,headers:{"content-type":"application/json",...(!["GET","HEAD","OPTIONS"].includes(method)?{"X-Admin-Request":"1"}:{}),...headers},...(body===undefined?{}:{body:JSON.stringify(body)})},env);}
 function row(id:string,time=H){d.sql("INSERT INTO usage(device_id,provider_id,model,input_tokens,output_tokens,total_tokens,cost_usd,request_id,created_at) VALUES('d','p','m',1,2,3,.5,?,?)",id,time);d.sql("INSERT INTO wallet_ledger(device_id,delta_usd,reason,request_id,created_at) VALUES('d',-.5,'usage',?,?)",id,time);}
 const page={before:4*H,limit:1};
 describe("manual retained usage admin API",()=>{

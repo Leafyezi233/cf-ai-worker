@@ -14,7 +14,7 @@ import { relayImageAnswer } from "./image_relay";
 import { consumeModelQuota } from "./quota";
 import { openModelKey, getModelWithProviderById, checkDeviceRateLimit, recordUsageSafe, randomRequestId, getSetting, getCurrentMonthSpend, getRecentProviderAvgLatencies, getRecentProviderFailureStats, getDeviceMonthlyCost, filterCandidatesForDevice, isModelInScope, getDeviceModelRateLimits, resolveModelKey, openGroupMemberKey, groupBillingRow, getDeviceGroupIds, getDeviceGroupRateLimits, reserveBalance, releaseReserve, chargeBalanceIfAffordable, getWallet, resolvePriceSnapshot } from "../db/repo";
 import { sendWebhookNotification } from "../utils/webhook";
-import { parseUsage } from "./usage";
+import { parseUsage, parseJsonUsage } from "./usage";
 import { buildUpstreamHeaders, buildProtocolHeaders, cleanResponseHeaders } from "../utils/http";
 import { readEnvSecret } from "../utils/env-secret";
 import { routeNeedsLatencies, selectCandidateRoute } from "./routing";
@@ -411,7 +411,7 @@ async function executeProxyAttempt(
         }
         pctx.latencyMs = Date.now() - startedAt;
         const responsesJson = convertChatToResponsesJson(chatJson, requestId, visibleModel);
-        const parsedUsage = parseUsage(usageProviderType(plannedPath), JSON.stringify(chatJson));
+        const parsedUsage = parseJsonUsage(usageProviderType(plannedPath), chatJson);
         const approxOutputTokens = Math.max(
           1,
           Math.ceil((responsesJson.output?.[0]?.content?.[0]?.text || "").length / 4)

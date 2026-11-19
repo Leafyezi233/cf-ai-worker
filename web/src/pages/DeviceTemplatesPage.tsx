@@ -6,6 +6,11 @@ import { IconAlertTriangle, IconEdit, IconFileText, IconPlus, IconTrash, IconUpl
 import { useToast } from "../components/Toast";
 import { invalidateCache, useQuery } from "../hooks/useQuery";
 
+import { useAdminFilters } from "../hooks/useAdminFilters";
+import { AdminListToolbar } from "../components/AdminListToolbar";
+const FILTERS = { q: "", sort: "", scope: "", group: "" };
+const EMPTY_TEMPLATES: DeviceTemplateItem[] = [];
+
 const SCOPE_LABELS: Record<ModelScope, string> = {
   all: "全部模型",
   list: "仅白名单",
@@ -65,12 +70,13 @@ function rpmPayload(map: Record<string, string>): Record<string, number> {
 
 export default function DeviceTemplatesPage() {
   const toast = useToast();
+  const [filters, setFilter, resetFilters] = useAdminFilters(FILTERS);
 
   const fetchTemplates = useCallback(async () => {
     const res = await api.get<{ items: DeviceTemplateItem[] }>("/api/device-templates");
     return res.items || [];
   }, []);
-  const { data: templates = [], loading, refresh } = useQuery("device-templates", fetchTemplates);
+  const { data: templates = EMPTY_TEMPLATES, loading, isRefreshing, error: listError, refresh } = useQuery("device-templates", fetchTemplates);
 
   const fetchModels = useCallback(async () => {
     const res = await api.get<{ items: ModelItem[] }>("/api/models");
@@ -302,6 +308,16 @@ export default function DeviceTemplatesPage() {
     }
   }
 
+  const grantGroups = useMemo(() => Array.from(new Map(templates.flatMap(t => t.groups.map(g => [g.group_id, g.display_name || g.name || g.group_id] as const)))).sort((a, b) => a[1].localeCompare(b[1])), [templates]);
+  const visibleTemplates = useMemo(() => {
+    const q = filters.q.trim().toLowerCase();
+    const result = templates.filter(t => (!q || [t.name, t.description, ...t.models.flatMap(m => [m.model_name, m.display_name]), ...t.groups.flatMap(g => [g.name, g.display_name])].some(v => v?.toLowerCase().includes(q)))
+      && (!filters.scope || t.model_scope === filters.scope)
+      && (!filters.group || t.groups.some(g => g.group_id === filters.group)));
+    if (filters.sort) result.sort((a, b) => (a.name.localeCompare(b.name) || a.id.localeCompare(b.id)) * (filters.sort === "name-desc" ? -1 : 1));
+    return result;
+  }, [templates, filters]);
+
   if (loading && !templates.length) return <Spinner text="正在加载设备模板…" />;
 
   return (
@@ -325,8 +341,15 @@ export default function DeviceTemplatesPage() {
         </div>
       </div>
 
+      <div className="[&_[aria-label=启用状态]]:hidden">
+      <AdminListToolbar filters={filters} onChange={setFilter} onReset={resetFilters} total={templates.length} count={visibleTemplates.length} loading={loading || isRefreshing} error={listError?.message} onRefresh={() => { void refresh(); }} searchPlaceholder="搜索模板 / 授权模型 / 分组（勿输入密钥）">
+        <Select aria-label="模板范围" className="!w-auto" value={filters.scope} onChange={e => setFilter("scope", e.target.value)}><option value="">全部模型范围</option>{Object.entries(SCOPE_LABELS).map(([id, label]) => <option key={id} value={id}>{label}</option>)}</Select>
+        <Select aria-label="授权模型分组" className="!w-auto" value={filters.group} onChange={e => setFilter("group", e.target.value)}><option value="">全部授权模型分组</option>{grantGroups.map(([id, label]) => <option key={id} value={id}>{label}</option>)}</Select>
+      </AdminListToolbar>
+      </div>
+      <p className="text-xs text-slate-400">模板没有启停状态或服务分组归属；状态条件不适用。刷新仅更新列表，不重置编辑草稿或套用目标。</p>
       <Card>
-        {templates.length ? (
+        {visibleTemplates.length ? (
           <div className="overflow-x-auto -mx-4 -my-4 sm:mx-0 sm:my-0">
             <table className="w-full text-left text-xs sm:text-sm min-w-[640px]">
               <thead>
@@ -340,7 +363,7 @@ export default function DeviceTemplatesPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                {templates.map((t) => (
+                {visibleTemplates.map((t) => (
                   <tr key={t.id} className="hover:bg-slate-50/60 dark:hover:bg-slate-800/50 transition-colors">
                     <td className="py-3 px-3">
                       <div className="font-semibold text-slate-900 dark:text-slate-100 whitespace-nowrap">{t.name}</div>
@@ -398,7 +421,7 @@ export default function DeviceTemplatesPage() {
             </table>
           </div>
         ) : (
-          <Empty text="还没有设备模板（新建一个，或从现有设备保存一份）" icon={<IconFileText />} />
+          <Empty text={listError && !templates.length ? "模板列表加载失败，请重试" : templates.length ? "没有符合筛选条件的模板" : "还没有设备模板（新建一个，或从现有设备保存一份）"} icon={<IconFileText />} />
         )}
       </Card>
 

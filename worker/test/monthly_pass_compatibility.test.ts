@@ -21,7 +21,7 @@ const adm = (request_id: string) => ({ request_id, device_id: DEVICE_ID, model: 
 const term = (request_id: string) => ({ request_id, device_id: DEVICE_ID, provider_id: "prov_a", provider_name: "Provider A", model: "gw-primary", cost_usd: .25, usage: { input_tokens: 1, output_tokens: 1, total_tokens: 2 }, status_code: 200, latency_ms: 1, created_at: Date.now() });
 function database(options?: Parameters<typeof createRealD1>[0]) { const db = createRealD1(options); open.push(db); return db; }
 function call(app = compatibilityApp, path = "/health", method = "GET", body?: unknown, headers: Record<string, string> = {}) {
-  return app.request("https://compat.local" + path, { method, headers: { accept: "application/json", "content-type": "application/json", "cf-connecting-ip": "192.0.2.60", ...headers }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) }, env);
+  return app.request("https://compat.local" + path, { method, headers: { accept: "application/json", "content-type": "application/json", "cf-connecting-ip": "192.0.2.60", ...(path.startsWith("/admin-prefix-example/api/") && !["GET", "HEAD", "OPTIONS"].includes(method) ? { "X-Admin-Request": "1" } : {}), ...headers }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) }, env);
 }
 const admin = (path: string, method = "GET", body?: unknown) => call(compatibilityApp, path, method, body, { cookie });
 async function card() { const plan = await createMonthlyPlan(env, input); return issueMonthlyPass(env, DEVICE_ID, plan.id); }
@@ -46,13 +46,13 @@ describe("current full-worker compatibility entry", () => {
     const sub = await card();
     const before = ["monthly_pass_plans", "monthly_pass_subscriptions", "monthly_pass_accounts", "audit_logs"].map(t => d.rows("SELECT * FROM " + t + " ORDER BY rowid"));
     const routes: Array<[string, string, unknown]> = [
-      ["/api/monthly-passes/plans", "POST", input], ["/api/monthly-passes/plans/" + sub.plan_id, "PUT", input],
-      ["/api/monthly-passes/accounts/" + DEVICE_ID + "/issue", "POST", { plan_id: sub.plan_id }],
-      ["/api/monthly-passes/subscriptions/" + sub.id + "/stop", "POST", {}],
-      ["/api/monthly-passes/subscriptions/" + sub.id + "/renew", "POST", {}],
-      ["/api/monthly-passes/accounts/" + DEVICE_ID + "/wallet-fallback", "PUT", { enabled: true }],
-      ["/api/monthly-passes/plans/new", "PATCH", {}], ["/api/monthly-passes/plans/new", "DELETE", {}],
-      ["/api/monthly-passes/", "POST", {}],
+      ["/admin-prefix-example/api/monthly-passes/plans", "POST", input], ["/admin-prefix-example/api/monthly-passes/plans/" + sub.plan_id, "PUT", input],
+      ["/admin-prefix-example/api/monthly-passes/accounts/" + DEVICE_ID + "/issue", "POST", { plan_id: sub.plan_id }],
+      ["/admin-prefix-example/api/monthly-passes/subscriptions/" + sub.id + "/stop", "POST", {}],
+      ["/admin-prefix-example/api/monthly-passes/subscriptions/" + sub.id + "/renew", "POST", {}],
+      ["/admin-prefix-example/api/monthly-passes/accounts/" + DEVICE_ID + "/wallet-fallback", "PUT", { enabled: true }],
+      ["/admin-prefix-example/api/monthly-passes/plans/new", "PATCH", {}], ["/admin-prefix-example/api/monthly-passes/plans/new", "DELETE", {}],
+      ["/admin-prefix-example/api/monthly-passes/", "POST", {}],
     ];
     for (const [path, method, body] of routes) {
       expect((await call(compatibilityApp, path, method, body)).status).toBe(401);
@@ -67,17 +67,17 @@ describe("current full-worker compatibility entry", () => {
   it("retains whitelist and cookie revocation checks; forged Access email cannot bypass", async () => {
     await card();
     env.CF_ACCESS_ALLOWED_EMAILS = "allowed@example.test";
-    expect((await call(compatibilityApp, "/api/monthly-passes/plans", "POST", input, { "cf-access-authenticated-user-email": "allowed@example.test" })).status).toBe(401);
+    expect((await call(compatibilityApp, "/admin-prefix-example/api/monthly-passes/plans", "POST", input, { "cf-access-authenticated-user-email": "allowed@example.test" })).status).toBe(401);
     d.sql("INSERT INTO settings(key,value_json,updated_at) VALUES('ip_whitelist_config',?,?)", JSON.stringify({ enabled: true, allowed_ips: ["203.0.113.42"] }), T);
-    expect((await admin("/api/monthly-passes/plans", "POST", input)).status).toBe(403);
+    expect((await admin("/admin-prefix-example/api/monthly-passes/plans", "POST", input)).status).toBe(403);
     d.sql("DELETE FROM settings WHERE key='ip_whitelist_config'");
     d.sql("INSERT INTO settings(key,value_json,updated_at) VALUES('session_epoch','1',?)", T);
-    expect((await admin("/api/monthly-passes/plans", "POST", input)).status).toBe(401);
+    expect((await admin("/admin-prefix-example/api/monthly-passes/plans", "POST", input)).status).toBe(401);
   });
 
   it("keeps all existing authorized reads/models and nonmonthly writes, without a new read privilege", async () => {
     await card();
-    for (const path of ["/api/monthly-passes/plans", "/api/monthly-passes/accounts", "/api/monthly-passes/accounts/" + DEVICE_ID, "/api/devices", "/api/providers"]) {
+    for (const path of ["/admin-prefix-example/api/monthly-passes/plans", "/admin-prefix-example/api/monthly-passes/accounts", "/admin-prefix-example/api/monthly-passes/accounts/" + DEVICE_ID, "/admin-prefix-example/api/devices", "/admin-prefix-example/api/providers"]) {
       expect((await call(compatibilityApp, path)).status).toBe(401);
       const normal = await call(currentApp, path, "GET", undefined, { cookie });
       const compatibility = await admin(path);
@@ -86,7 +86,7 @@ describe("current full-worker compatibility entry", () => {
     const models = await call(compatibilityApp, "/v1/models", "GET", undefined, { authorization: "Bearer " + TOKEN });
     expect(models.status).toBe(200); expect(await models.json()).toMatchObject({ data: [{ id: "gw-primary" }] });
     expect((await call(compatibilityApp, "/console/monthly-pass", "GET", undefined, { authorization: "Bearer " + TOKEN })).status).toBe(200);
-    expect((await admin("/api/providers", "POST", { name: "new provider", type: "openai", endpoint: "https://not-contacted.invalid/v1" })).status).toBe(201);
+    expect((await call(compatibilityApp, "/admin-prefix-example/api/providers", "POST", { name: "new provider", type: "openai", endpoint: "https://not-contacted.invalid/v1" }, { cookie, "X-Admin-Request": "1" })).status).toBe(201);
     expect((await call(compatibilityApp, "/health")).status).toBe(200);
   });
 
@@ -100,14 +100,14 @@ describe("current full-worker compatibility entry", () => {
   });
 
   it("switches current to compatibility on SAME DB with active monthly settlement, expired unknown recovery and new proxy billing", async () => {
-    const created = await call(currentApp, "/api/monthly-passes/plans", "POST", input, { cookie }); expect(created.status).toBe(201);
+    const created = await call(currentApp, "/admin-prefix-example/api/monthly-passes/plans", "POST", input, { cookie, "X-Admin-Request": "1" }); expect(created.status).toBe(201);
     const plan = (await created.json() as { item: { id: string } }).item;
-    expect((await call(currentApp, "/api/monthly-passes/accounts/" + DEVICE_ID + "/issue", "POST", { plan_id: plan.id, operation_id: "compat-switch-issue" }, { cookie })).status).toBe(201);
+    expect((await call(currentApp, "/admin-prefix-example/api/monthly-passes/accounts/" + DEVICE_ID + "/issue", "POST", { plan_id: plan.id, operation_id: "compat-switch-issue" }, { cookie, "X-Admin-Request": "1" })).status).toBe(201);
     for (const id of ["active-on-switch", "pending-on-switch", "unknown-on-switch"]) expect(await admitBillingRequest(env, adm(id))).toBe(true);
     await persistBillingTerminal(env, term("pending-on-switch"));
     await beginBillingAttempt(env, { request_id: "unknown-on-switch", provider_id: "prov_a", model: "gw-primary", protocol: "chat" });
     const beforeManifest = manifest();
-    expect((await admin("/api/monthly-passes/plans")).status).toBe(200);  
+    expect((await admin("/admin-prefix-example/api/monthly-passes/plans")).status).toBe(200);  
     await persistBillingTerminal(env, term("active-on-switch")); await settleBillingRequest(env, "active-on-switch");
     vi.mocked(Date.now).mockReturnValue(T + 6 * 60000);
     const tasks: Promise<unknown>[] = [];
@@ -157,7 +157,7 @@ describe("local migration and current-manifest compatibility (no downgrade)", ()
     expect(stages).toHaveLength(3 + definition.extensions!.length); expect(stages.every(s => s.completed === 1)).toBe(true);
     const localEnv = { ...env, DB: legacy.DB };
     const beforeCold = manifest(legacy); resetSchemaCache(legacy.DB);
-    const response = await compatibilityApp.request("https://compat.local/api/monthly-passes/plans", { headers: { cookie } }, localEnv);
+    const response = await compatibilityApp.request("https://compat.local/admin-prefix-example/api/monthly-passes/plans", { headers: { cookie } }, localEnv);
     expect(response.status, await response.clone().text()).toBe(200); expect(manifest(legacy)).toEqual(beforeCold);
   });
 
@@ -172,12 +172,12 @@ describe("local migration and current-manifest compatibility (no downgrade)", ()
     vi.spyOn(console, "error").mockImplementation(() => undefined);
     for (const worker of [currentWorker, compatibilityWorker]) {
       resetSchemaCache(core.DB);
-      const response = await worker.fetch(new Request("https://compat.local/api/monthly-passes/plans", { headers: { cookie } }), localEnv);
+      const response = await worker.fetch(new Request("https://compat.local/admin-prefix-example/api/monthly-passes/plans", { headers: { cookie } }), localEnv);
       expect(response.status).toBe(500); expect(await response.json()).toEqual({ error: "internal_server_error" });
       expect(manifest(core)).toEqual(unknownManifest);
     }
     resetSchemaCache(core.DB);
-    const blocked = await compatibilityWorker.fetch(new Request("https://compat.local/api/monthly-passes/plans", { method: "POST", headers: { cookie, "content-type": "application/json" }, body: JSON.stringify(input) }), localEnv);
+    const blocked = await compatibilityWorker.fetch(new Request("https://compat.local/admin-prefix-example/api/monthly-passes/plans", { method: "POST", headers: { cookie, "content-type": "application/json", "X-Admin-Request": "1" }, body: JSON.stringify(input) }), localEnv);
     expect(blocked.status).toBe(500); expect(await blocked.json()).toEqual({ error: "internal_server_error" });
     expect(manifest(core)).toEqual(unknownManifest);
   });

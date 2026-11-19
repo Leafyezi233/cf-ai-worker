@@ -81,6 +81,10 @@ export interface DeviceItem {
   model_scope?: ModelScope;
   calls_enabled?: number | boolean;
   password_set?: number | boolean;
+  routing_policy_mode?: string;
+  routing_group_ids?: string[];
+  selected_service_group_id?: string | null;
+  selected_service_group_name?: string | null;
   last_used_at: number | null;
   created_at: number;
   revoked_at: number | null;

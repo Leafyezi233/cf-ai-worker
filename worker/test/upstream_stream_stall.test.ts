@@ -32,9 +32,12 @@ afterEach(() => {
 
 function shortenStreamTimers() {
   const realSetTimeout = globalThis.setTimeout;
+  const realNow = performance.now.bind(performance);
+  let elapsed = 0;
+  vi.spyOn(performance, "now").mockImplementation(() => realNow() + elapsed);
   vi.spyOn(globalThis, "setTimeout").mockImplementation(((fn: () => void, delay?: number, ...rest: unknown[]) =>
-    delay === UPSTREAM_FIRST_CHUNK_TIMEOUT_MS || delay === UPSTREAM_STREAM_STALL_TIMEOUT_MS
-      ? realSetTimeout(fn, 5)
+    delay !== undefined && (fn.name === "onWatchdogTimeout" || delay === UPSTREAM_FIRST_CHUNK_TIMEOUT_MS || delay === UPSTREAM_STREAM_STALL_TIMEOUT_MS)
+      ? realSetTimeout(() => { elapsed += Math.max(0, delay - 5); fn(); }, Math.min(5, delay))
       : realSetTimeout(fn, delay, ...(rest as []))) as unknown as typeof globalThis.setTimeout);
 }
 

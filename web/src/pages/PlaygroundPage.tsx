@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import { api, fmtNum } from "../api/client";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { api, fmtNum, adminFetch } from "../api/client";
 import type { ModelGroupItem, ModelItem, Provider } from "../types";
 import { Badge, Button, Card, Empty, Input, Select, Spinner, CopyButton } from "../components/ui";
 import {
@@ -54,7 +54,7 @@ export default function PlaygroundPage() {
   const fetchModels = useCallback(async () => {
     const [res, groups] = await Promise.all([
       api.get<{ items: ModelItem[] }>("/api/models"),
-      api.get<{ items: ModelGroupItem[] }>("/api/model-groups").catch(() => ({ items: [] as ModelGroupItem[] })),
+      api.get<{ items: ModelGroupItem[] }>("/api/model-groups"),
     ]);
     const modelRows = (res.items || []).filter((m) => m.enabled);
     const groupRows: ModelItem[] = (groups.items || [])
@@ -80,7 +80,7 @@ export default function PlaygroundPage() {
       }));
     return [...modelRows, ...groupRows];
   }, []);
-  const { data: models = [], loading: loadingModels } = useQuery("playground-models", fetchModels);
+  const { data: models = [], loading: loadingModels, isRefreshing: refreshingModels, error: modelsError, refresh: refreshModels } = useQuery("playground-models", fetchModels, { revalidateIfFresh: false });
 
   const [selectedModel, setSelectedModel] = useState<string>("");
   const [systemPrompt, setSystemPrompt] = useState<string>("You are a helpful, accurate, and concise AI assistant.");
@@ -88,6 +88,13 @@ export default function PlaygroundPage() {
   const [maxTokens, setMaxTokens] = useState<number>(2048);
   const [stream, setStream] = useState<boolean>(true);
   const [reasoningEffort, setReasoningEffort] = useState<string>("");
+
+  const [modelSearch, setModelSearch] = useState("");
+  const visibleModels = useMemo(() => {
+    const keyword = modelSearch.trim().toLowerCase();
+    return models.filter(m => !keyword || [m.id, m.model_name, m.display_name, m.alias].some(value => value?.toLowerCase().includes(keyword)));
+  }, [models, modelSearch]);
+  const selectedHidden = models.find(m => (m.alias || m.model_name) === selectedModel && !visibleModels.includes(m));
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputText, setInputText] = useState<string>("");
@@ -150,9 +157,9 @@ export default function PlaygroundPage() {
           },
         ]);
 
-        const response = await fetch("/api/playground/chat", {
+        const response = await adminFetch("/api/playground/chat", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json", "X-Admin-Request": "1" },
           body: JSON.stringify({
             model: selectedModel,
             messages: apiMessages,
@@ -343,11 +350,16 @@ export default function PlaygroundPage() {
                 <label className="block font-medium text-slate-700 dark:text-slate-300 mb-1">
                   选择测试模型 / 别名 / 分组
                 </label>
+                <Input aria-label="搜索测试模型" placeholder="搜索模型名称、别名或 ID（不发请求）" value={modelSearch} onChange={e => setModelSearch(e.target.value)} />
+                <div className="my-1 flex flex-wrap items-center gap-2"><span>{visibleModels.length} / {models.length} 个可用模型或模型组</span><Button size="sm" variant="ghost" disabled={refreshingModels || loadingModels} onClick={() => void refreshModels(true).catch(() => {})}>刷新选项</Button><Button size="sm" variant="ghost" onClick={() => setModelSearch("")}>清空搜索</Button></div>
+                {modelsError ? <p role="alert">模型选项刷新失败：{modelsError.message}；保留原有选项和对话。</p> : null}
+                {selectedHidden ? <p className="text-amber-600">当前模型不匹配搜索，仍保持已选，不会自动切换。</p> : null}
                 {loadingModels ? (
                   <Spinner text="正在加载可用模型…" />
                 ) : (
-                  <Select value={selectedModel} onChange={(e) => setSelectedModel(e.target.value)}>
-                    {models.map((m) => (
+                  <Select aria-label="测试模型" value={selectedModel} onChange={(e) => setSelectedModel(e.target.value)}>
+                    {selectedHidden ? <option value={selectedModel}>{selectedHidden.display_name || selectedHidden.model_name}（当前已选）</option> : null}
+                    {visibleModels.map((m) => (
                       <option key={m.id} value={m.alias || m.model_name}>
                         {m.display_name || m.model_name} {m.alias ? `(别名: ${m.alias})` : ""}
                       </option>

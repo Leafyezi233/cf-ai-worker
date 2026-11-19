@@ -10,6 +10,8 @@ vi.mock("../../web/src/hooks/useQuery", () => ({
 }));
 vi.mock("../../web/src/components/Toast", () => ({ useToast: () => ({ success: vi.fn(), error: vi.fn() }) }));
 const requireWeb = createRequire(new URL("../../web/package.json", import.meta.url));
+const location = { pathname: "/admin/models", search: "", hash: "" };
+vi.doMock((requireWeb as any).resolve("react-router-dom"), () => ({ useLocation: () => location, useNavigate: () => vi.fn() }));
 const React = requireWeb("react");
 const { renderToStaticMarkup } = requireWeb("react-dom/server");
 const componentPath = "../../web/src/components/ModelCategories.tsx";
@@ -36,6 +38,7 @@ function seededPage(component: () => unknown, seeds: Record<number, unknown>) {
   return render(Seeded);
 }
 beforeEach(() => {
+  location.search = "";
   vi.clearAllMocks(); fixture.post.mockResolvedValue({}); fixture.refresh.mockResolvedValue(undefined);
   fixture.categories = { items: [category("a"), category("b", { enabled: 0, color: "red", sort_order: 3 })], bindings: [{ model_name: "public", category_id: "a" }, { model_name: "public", category_id: "b" }] };
   fixture.models = []; fixture.groups = []; fixture.error = null; fixture.loading = false;
@@ -116,12 +119,14 @@ describe("admin page category integration SSR", () => {
     const html = render(ModelsPage);
     expect(plain(html)).toContain("模型分类管理"); expect(plain(html)).toContain("模型分类（公开名）");
     expect(html).toContain("编程研发");
-    const filtered = seededPage(ModelsPage, { 26: "a" });
+    location.search = "?list_category=a";
+    const filtered = render(ModelsPage);
     expect(plain(filtered)).toContain("raw-upstream"); expect(plain(filtered)).not.toContain("uncategorized");
   });
   it("renders group-name badges, batch selection and category-filtered groups", () => {
     fixture.groups = [{ id: "g1", name: "public", members: [], billing_unit: "token", config_json: "{}", enabled: true }, { id: "g2", name: "unclassified-group", members: [], billing_unit: "token", config_json: "{}", enabled: true }];
-    const html = seededPage(ModelGroupsPage, { 0: "a", 1: ["g1"] });
+    location.search = "?list_category=a";
+    const html = seededPage(ModelGroupsPage, { 0: ["g1"] });
     expect(plain(html)).toContain("模型分类（公开名）"); expect(plain(html)).toContain("批量分类"); expect(html).toContain("编程研发"); expect(html).not.toContain("unclassified-group");
   });
   it("filters mapping display without changing the full save payload and disables draft-name assignments", () => {

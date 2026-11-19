@@ -1,0 +1,16 @@
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { createRequire } from "node:module";
+const f=vi.hoisted(()=>({get:vi.fn(),refresh:vi.fn(),fetcher:undefined as any,options:undefined as any}));
+vi.mock("../../web/src/api/client",()=>({api:{get:f.get},adminFetch:vi.fn(),fmtNum:String}));
+vi.mock("../../web/src/components/Toast",()=>({useToast:()=>({success:vi.fn(),error:vi.fn()})}));
+vi.mock("../../web/src/hooks/useQuery",()=>({useQuery:(_key:string,fetcher:any,options:any)=>{f.fetcher=fetcher;f.options=options;return {data:[{id:"a",model_name:"alpha",display_name:"Alpha"},{id:"b",model_name:"beta",alias:"public-beta"}],loading:false,refresh:f.refresh};}}));
+const requireWeb=createRequire(new URL("../../web/package.json",import.meta.url));const React=requireWeb("react");const {renderToStaticMarkup}=requireWeb("react-dom/server");
+const pp="../../web/src/pages/PlaygroundPage";const sp="../../web/src/components/SettingsLocator";const {default:PlaygroundPage}=await import(pp);const {SettingsLocator,SETTINGS_SECTIONS}=await import(sp);
+function nodes(v:any):any[]{return Array.isArray(v)?v.flatMap(nodes):v&&typeof v==="object"?[v,...nodes(v.props?.children)]:[];}
+function harness(component:any){const slots:any[]=[];let index=0;const dispatcher={useState(initial:any){const n=index++;if(!(n in slots))slots[n]=typeof initial==="function"?initial():initial;return [slots[n],(v:any)=>slots[n]=typeof v==="function"?v(slots[n]):v];},useRef(initial:any){const n=index++;return slots[n]||={current:initial};},useMemo(fn:any){return fn();},useCallback(fn:any){return fn;},useEffect(){}};return {render(){index=0;const d=React.__SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED.ReactCurrentDispatcher;const prev=d.current;d.current=dispatcher;try{return component();}finally{d.current=prev;}}};}
+beforeEach(()=>vi.clearAllMocks());
+describe("local-only option and section search",()=>{
+ it("keeps selected model even when keyword hides it and makes zero API calls",()=>{const h=harness(PlaygroundPage);let tree=h.render();nodes(tree).find(n=>n.props?.["aria-label"]==="测试模型").props.onChange({target:{value:"alpha"}});nodes(tree).find(n=>n.props?.["aria-label"]==="搜索测试模型").props.onChange({target:{value:"public-beta"}});tree=h.render();expect(nodes(tree).filter(n=>n.type==="option").some(n=>n.props.value==="alpha")).toBe(true);expect(nodes(tree).filter(n=>n.type==="option").some(n=>n.props.value==="public-beta")).toBe(true);expect(f.get).not.toHaveBeenCalled();expect(f.options.revalidateIfFresh).toBe(false);});
+ it("surfaces model-group fetch errors rather than empty successful choices",async()=>{renderToStaticMarkup(React.createElement(PlaygroundPage));f.get.mockImplementation(async(p:string)=>{if(p.includes("model-groups"))throw Error("group_fetch_failed");return {items:[]};});await expect(f.fetcher()).rejects.toThrow("group_fetch_failed");});
+ it("filters only section links without touching forms or backend",()=>{const h=harness(SettingsLocator);let tree=h.render();nodes(tree).find(n=>n.props?.["aria-label"]==="搜索设置分区").props.onChange({target:{value:"审计"}});tree=h.render();expect(nodes(tree).filter(n=>n.type==="a").map(n=>n.props.href)).toEqual(["#settings-audit"]);expect(f.get).not.toHaveBeenCalled();expect(new Set(SETTINGS_SECTIONS.map(([id]:any)=>id)).size).toBe(12);});
+});

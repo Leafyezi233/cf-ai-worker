@@ -1,6 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createRequire } from "node:module";
 const requireWeb = createRequire(new URL("../../web/package.json", import.meta.url));
+vi.doMock((requireWeb as any).resolve("react-router-dom"), () => ({
+  useLocation: () => ({ pathname: "/admin/models", search: "", hash: "" }),
+  useNavigate: () => vi.fn(),
+}));
 const React = requireWeb("react");
 const { renderToStaticMarkup } = requireWeb("react-dom/server");
 const fixture = vi.hoisted(() => ({ items: [] as any[] }));
@@ -23,7 +27,7 @@ function render(format?: string, serverCatalog = "") {
     const original = dispatcher.useState;
     dispatcher.useState = (initial: unknown) => {
       const index = stateIndex++;
-      return original(index === 11 ? Boolean(format) : index === 12 ? (format || "catalog") : index === 23 ? serverCatalog : initial);
+      return original(index === 8 ? Boolean(format) : index === 9 ? (format || "catalog") : index === 20 ? serverCatalog : initial);
     };
     try { return ModelsPage(); } finally { dispatcher.useState = original; }
   }

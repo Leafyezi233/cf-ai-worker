@@ -1,6 +1,8 @@
 import { useCallback, useMemo, useState, type FormEvent } from "react";
 import { useModelCategories, ModelCategoryAssignment, ModelCategoryBadges, ModelCategoryFilter, matchesModelCategory, CATEGORY_RENAME_HELP } from "../components/ModelCategories";
 import { api, ApiError } from "../api/client";
+import { useAdminFilters } from "../hooks/useAdminFilters";
+import { AdminListToolbar } from "../components/AdminListToolbar";
 import { ModelCatalogVisibility, ModelCatalogVisibilityBadge, setCatalogVisible } from "../components/ModelCatalogVisibility";
 import type { ModelGroupItem, ModelItem } from "../types";
 import { Badge, Button, Card, Empty, Input, Modal, Select, Spinner, Textarea } from "../components/ui";
@@ -115,20 +117,21 @@ function GroupReasoningCell({ group }: { group: ModelGroupItem }) {
 export default function ModelGroupsPage() {
   const toast = useToast();
   const categories = useModelCategories();
-  const [categoryFilter, setCategoryFilter] = useState("");
+  const [filters, setFilter, resetFilters] = useAdminFilters({ q: "", category: "", enabled: "", pricing: "", type: "", sort: "" });
+  const categoryFilter = filters.category;
   const [categorySelection, setCategorySelection] = useState<string[]>([]);
 
   const fetchGroups = useCallback(async () => {
     const res = await api.get<{ items: ModelGroupItem[] }>("/api/model-groups");
     return res.items || [];
   }, []);
-  const { data: groups = [], loading, refresh } = useQuery("model-groups", fetchGroups);
+  const { data: groups = [], loading, isRefreshing, error: queryError, updatedAt, refresh } = useQuery("model-groups", fetchGroups, { revalidateIfFresh: false });
 
   const fetchModels = useCallback(async () => {
     const res = await api.get<{ items: ModelItem[] }>("/api/models");
     return res.items || [];
   }, []);
-  const { data: models = [] } = useQuery("model-groups-models", fetchModels);
+  const { data: models = [] } = useQuery("model-groups-models", fetchModels, { revalidateIfFresh: false });
 
   const [formOpen, setFormOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -310,7 +313,23 @@ export default function ModelGroupsPage() {
     return { inMax, outMax };
   }, [memberIds, modelById]);
 
-  const list = groups.filter(g => matchesModelCategory(categories.data, g.name, categoryFilter));
+  const groupTypes = useMemo(() => new Map(groups.map(g => [g.id, resolvedModelType(g.config_json, g.billing_unit)])), [groups]);
+  const list = useMemo(() => {
+    const result = groups.filter(g => {
+    if (!matchesModelCategory(categories.data, g.name, categoryFilter)) return false;
+    if ((filters.enabled === "1" && !g.enabled) || (filters.enabled === "0" && g.enabled)) return false;
+    if (filters.pricing && (g.pricing_mode || "unset") !== filters.pricing) return false;
+    if (filters.type && groupTypes.get(g.id) !== filters.type) return false;
+    const q = filters.q.trim().toLowerCase();
+    return !q || g.name.toLowerCase().includes(q) || (g.display_name || "").toLowerCase().includes(q);
+  });
+  if (filters.sort === "name" || filters.sort === "name-desc") {
+    result.sort((a, b) => a.name.localeCompare(b.name) * (filters.sort === "name-desc" ? -1 : 1));
+  }
+  return result;
+  }, [groups, categories.data, categoryFilter, filters, groupTypes]);
+  const visibleIds = new Set(list.map(g => g.id));
+  const hiddenSelectionCount = categorySelection.filter(id => !visibleIds.has(id)).length;
 
   return (
     <div className="space-y-4">
@@ -332,17 +351,27 @@ export default function ModelGroupsPage() {
           在 config_json 里写 <code>{'{"member_retries": 2}'}</code>（0–3，默认 0）可让每个成员
           在换下一个之前先对这类瞬时失败原地重试最多 2 次，适合时好时坏的上游。
         </p>
-        <div className="mb-4 flex flex-wrap items-center gap-3">
-          <ModelCategoryFilter state={categories} value={categoryFilter} onChange={setCategoryFilter} />
+        <AdminListToolbar filters={filters} onChange={setFilter} onReset={resetFilters} total={groups.length} count={list.length} loading={loading || isRefreshing} error={queryError ? "读取失败：" + queryError.message + "；如有旧数据仍予保留" : null} onRefresh={() => { void refresh().catch(() => {}); }} searchPlaceholder="搜索组名 / 显示名…">
+          <ModelCategoryFilter state={categories} value={categoryFilter} onChange={value => setFilter("category", value)} />
+          <Select aria-label="计价模式" className="!w-auto" value={filters.pricing} onChange={e => setFilter("pricing", e.target.value)}>
+            <option value="">全部计价模式</option><option value="free">免费</option><option value="priced">按价计费</option><option value="unset">未定价</option>
+          </Select>
+          <Select aria-label="模型类型" className="!w-auto" value={filters.type} onChange={e => setFilter("type", e.target.value)}>
+            <option value="">全部模型类型</option><option value="text">文本</option><option value="image">图片</option><option value="embedding">向量</option><option value="video">视频</option>
+          </Select>
+        </AdminListToolbar>
+        {updatedAt && <p className="mt-2 text-xs text-slate-500">上次成功更新：{new Date(updatedAt).toLocaleTimeString()}</p>}
+        <div className="my-4 flex flex-wrap items-center gap-3">
           <label className="flex items-center gap-2 text-sm"><input type="checkbox" aria-label="选择当前筛选全部模型组" checked={list.length > 0 && list.every(g => categorySelection.includes(g.id))} onChange={e => setCategorySelection(e.target.checked ? [...new Set([...categorySelection, ...list.map(g => g.id)])] : categorySelection.filter(id => !list.some(g => g.id === id)))} />选择当前筛选</label>
-          <span className="text-xs text-slate-500">已选 {groups.filter(g => categorySelection.includes(g.id)).length} 个模型组</span>
-          <ModelCategoryAssignment state={categories} modelNames={groups.filter(g => categorySelection.includes(g.id)).map(g => g.name)} label="批量分类" />
+          <span className="text-xs text-slate-500">已选 {categorySelection.length} 个模型组（隐藏 {hiddenSelectionCount} 项）</span>
+          <ModelCategoryAssignment state={categories} modelNames={groups.filter(g => categorySelection.includes(g.id)).map(g => g.name)} label="批量分类" disabled={hiddenSelectionCount > 0} />
+          {hiddenSelectionCount > 0 ? <><span role="alert" className="text-xs text-amber-600">存在隐藏选项，清理后才能批量操作。</span><Button type="button" size="sm" variant="outline" onClick={() => setCategorySelection(categorySelection.filter(id => visibleIds.has(id)))}>清理隐藏选择</Button></> : null}
           <Button type="button" size="sm" variant="ghost" onClick={() => setCategorySelection([])}>清除选择</Button>
         </div>
         {loading ? (
           <Spinner text="加载分组…" />
         ) : list.length === 0 ? (
-          <Empty text={categoryFilter ? "当前分类没有模型组，请切换分类筛选。" : "还没有分组。先新建一个，再把模型按顺序加进去。"} icon={<IconModels className="w-8 h-8" />} />
+          <Empty text={groups.length ? "没有匹配的模型组，请调整或清空筛选。" : "还没有分组。先新建一个，再把模型按顺序加进去。"} icon={<IconModels className="w-8 h-8" />} />
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -406,18 +435,18 @@ export default function ModelGroupsPage() {
                         )}
                       </div>
                       <div className="text-[11px] text-slate-400 font-mono">
-                        {resolvedModelType(g.config_json, g.billing_unit) === "embedding"
+                        {groupTypes.get(g.id) === "embedding"
                           ? `输入 ¥${g.input_price_per_m}/M · 仅输入计费`
-                          : resolvedModelType(g.config_json, g.billing_unit) === "video"
+                          : groupTypes.get(g.id) === "video"
                           ? `¥${g.price_per_call || 0}/成功任务次`
                           : g.billing_unit === "call"
                           ? `¥${g.price_per_call || 0}/次`
                           : `¥${g.input_price_per_m}/M · ¥${g.output_price_per_m}/M`}
-                        {!["embedding", "video"].includes(resolvedModelType(g.config_json, g.billing_unit)) && g.search_price_per_call ? ` · +${g.search_price_per_call}/搜索` : ""}
+                        {!["embedding", "video"].includes(groupTypes.get(g.id) ?? "text") && g.search_price_per_call ? ` · +${g.search_price_per_call}/搜索` : ""}
                       </div>
                     </td>
                     <td className="py-2 pr-3 text-xs text-slate-500">
-                      {["embedding", "video"].includes(resolvedModelType(g.config_json, g.billing_unit)) ? "不适用" : g.cache_enabled ? "开 · " + g.cache_ttl + "s" : "关"}
+                      {["embedding", "video"].includes(groupTypes.get(g.id) ?? "text") ? "不适用" : g.cache_enabled ? "开 · " + g.cache_ttl + "s" : "关"}
                     </td>
                     <td className="py-2 pr-3">
                       <GroupReasoningCell group={g} />

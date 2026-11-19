@@ -163,19 +163,20 @@ describe('audit rows can be filtered by who acted', () => {
     await postConsole(env, '/auth/setup', { password: PASSWORD }, undefined, '198.51.100.9');
     await adminRequest(env, '/' + DEVICE_ID + '/topup', 'POST', { amount_usd: 1 });
 
-    const all = (await (await auditApp.request('http://gw.test/', {}, env)).json()) as { total: number };
-    expect(all.total).toBe(2);
+    const all = (await (await auditApp.request('http://gw.test/', {}, env)).json()) as { items: unknown[]; has_more: boolean };
+    expect(all.items).toHaveLength(2);
+    expect(all.has_more).toBe(false);
 
     const consoleOnly = (await (
       await auditApp.request('http://gw.test/?actor_type=console', {}, env)
     ).json()) as { total: number; items: { actor_type: string; action: string }[] };
-    expect(consoleOnly.total).toBe(1);
+    expect(consoleOnly.items).toHaveLength(1);
     expect(consoleOnly.items[0].action).toBe('console.password_setup');
 
     const adminOnly = (await (
       await auditApp.request('http://gw.test/?actor_type=admin', {}, env)
     ).json()) as { total: number; items: { action: string }[] };
-    expect(adminOnly.total).toBe(1);
+    expect(adminOnly.items).toHaveLength(1);
     expect(adminOnly.items[0].action).toBe('device.topup');
     d1.close();
   });

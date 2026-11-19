@@ -258,6 +258,13 @@ export type ConsoleModelMarketplaceItem = ConsoleModels["items"][number] & {
 
 export interface ConsoleModelMarketplace {
   items: ConsoleModelMarketplaceItem[];
+  routing?: {
+    mode: "auto" | "legacy" | "fixed" | "multi";
+    selection: "ordered" | "input_price" | null;
+    failure_fallback: boolean;
+    fixed_group_id: string | null;
+    fixed_group_name: string | null;
+  };
   peak_pricing_tz_offset_minutes?: number;
 }
 

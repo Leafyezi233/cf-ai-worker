@@ -449,7 +449,7 @@ describe("native SSE", () => {
   });
 
   it("turns a stalled native stream into a failure and settles its partial output", async () => {
-    vi.useFakeTimers();
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date", "performance"] });
     const { env, d1 } = await seed();
     upstream(() => new Response(new ReadableStream({
       start(ctrl) { ctrl.enqueue(new TextEncoder().encode(frame("response.output_text.delta", { delta: "partial" }))); },

@@ -48,16 +48,20 @@ describe("TokenPolicyEditor SSR safety and clarity (not browser E2E)", () => {
   it("distinguishes whole-policy null inheritance from independent override", () => {
     const { html, text } = render(null);
     expect(select(html, "策略来源")).toContain('<option value="inherit" selected="">');
-    expect(text).toContain("保存 null 将整份继承账户默认；不是逐字段合并。");
-    expect(text).toContain("使用此 Token 的完整覆盖");
-    expect(html).toMatch(/<fieldset[^>]*disabled=""/);
+    expect(text).toContain("保存后将跟随账户默认设置。");
+    expect(text).toContain("单独设置");
+    expect(html).not.toContain("<fieldset");
+    expect(select(html, "路由模式")).toBe("");
     expect(text).toContain("来源：账户默认");
   });
 
   it("uses distinct account/master/sub-token labels and account-null wording", () => {
     const account = render(null, { target: "account" });
     expect(account.text).toContain("账户默认路由策略");
-    expect(account.text).toContain("保存 null 将清除整份账户策略，沿用兼容默认。");
+    expect(account.html).not.toContain("<fieldset");
+    expect(select(account.html, "策略来源")).toContain("自定义账户默认");
+    expect(render(policy(), { target: "account" }).html).toContain("<fieldset");
+    expect(account.text).toContain("保存后将恢复系统默认设置。");
     expect(render(policy(), { target: "child-1", label: "研发子令牌" }).text).toContain("研发子令牌");
     expect(render(policy(), { target: "child-1" }).text).toContain("子 Token 路由策略");
   });
@@ -87,7 +91,7 @@ describe("TokenPolicyEditor SSR safety and clarity (not browser E2E)", () => {
       scopeOptions: [{ key: "public:identity-1", label: "共享模型", group_ids: ["g1"] }],
     });
     expect(text).toContain("模型例外在所选分组中不可用");
-    expect(text).toContain("public:identity-1");
+    expect(text).toContain("共享模型"); expect(text).not.toContain("public:identity-1");
     expect(html.match(/<button[^>]*type="submit"[^>]*>/)?.[0]).toContain('disabled=""');
   });
 
@@ -109,7 +113,7 @@ describe("TokenPolicyEditor SSR safety and clarity (not browser E2E)", () => {
     expect(text).toContain("兼容旧配置");
     expect(text).toContain("请保存继承，明确清除旧选择");
     expect(html.match(/<button[^>]*type="submit"[^>]*>/)?.[0]).not.toContain('disabled=""');
-    expect(html.match(/<input[^>]*type="checkbox"[^>]*[/]>允许失败后切换分组/)?.[0]).not.toContain('checked=""');
+    expect(html).not.toContain("<fieldset");
   });
 
   it("keeps missing/disabled selected groups instead of silently dropping them", () => {
@@ -125,7 +129,7 @@ describe("TokenPolicyEditor SSR safety and clarity (not browser E2E)", () => {
 
   it("uses stable model override keys and only selected group choices", () => {
     const { html, text } = render(policy({ group_ids: ["g2"], model_overrides: { "public:identity-1": "g2" } }));
-    expect(text).toContain("public:identity-1 → 绿组");
+    expect(text).toContain("共享模型 → 绿组"); expect(text).not.toContain("public:identity-1");
     expect(select(html, "例外模型")).toContain('value="public:identity-1"');
     expect(select(html, "例外模型")).not.toContain('value="shared-model"');
     expect(select(html, "例外固定分组")).toContain('value="g2"');
@@ -146,8 +150,8 @@ describe("TokenPolicyEditor SSR safety and clarity (not browser E2E)", () => {
     expect(select(inherited.html, "模型范围来源")).toContain('<option value="inherit" selected="">');
     expect(scopeCheckboxes(inherited.html)).toBe("");
     expect(select(none.html, "模型范围来源")).toContain('<option value="fixed" selected="">');
-    expect(none.text).toContain("当前为 []：此策略不允许调用任何模型，不等同于继承。");
-    expect(none.text).toContain("独立 Token 使用整份独立策略，不与账户默认策略的 scope 叠加");
+    expect(none.text).toContain("尚未勾选模型：保存后将无法调用任何模型，不会自动使用账户默认范围。");
+    expect(none.text).toContain("单独设置后，不再跟随账户默认设置。");
     expect(none.text).not.toContain("取交集");
     expect(scopeCheckboxes(none.html).match(/type="checkbox"/g)).toHaveLength(3);
     expect(scopeCheckboxes(none.html)).not.toContain('checked=""');
@@ -159,14 +163,14 @@ describe("TokenPolicyEditor SSR safety and clarity (not browser E2E)", () => {
     expect(choices.match(/type="checkbox"/g)).toHaveLength(2);
     expect(choices.match(/调用名：shared-model/g)).toHaveLength(1);
     expect(choices.match(/checked=""/g)).toHaveLength(1);
-    expect(choices).toContain("model:other");
+    expect(choices).toContain("共享模型"); expect(choices).not.toContain("model:other");
   });
 
   it("retains missing scope keys and provides an explicit removal control", () => {
     const p = policy({ model_scope: ["model:gone", "group:models-1"] });
     const { html, text } = render(p);
-    expect(text).toContain("已失效范围（保留）：model:gone");
-    expect(html).toContain('aria-label="移除范围 model:gone"');
+    expect(text).toContain("已失效模型范围（保留，请移除）"); expect(text).not.toContain("model:gone");
+    expect(html).toContain('aria-label="移除失效模型范围"');
     expect(p.model_scope).toEqual(["model:gone", "group:models-1"]);
   });
 

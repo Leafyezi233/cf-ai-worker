@@ -64,8 +64,30 @@ function publicDevice<T extends Record<string, any>>(row: T) {
 }
 
 devicesApp.get("/", async (c) => {
-  const items = await listDevices(c.env, { includeRevoked: c.req.query("include_revoked") === "1" });
-  return c.json({ items });
+  const includeRevoked = c.req.query("include_revoked") === "1";
+  const items = await listDevices(c.env, { includeRevoked });
+  if (c.req.query("include_routing") !== "1") return c.json({ items });
+  const routing = await c.env.DB.prepare("SELECT d.id, d.service_group_id, d.default_service_group_id, p.policy_json, g.name AS selected_service_group_name FROM devices d LEFT JOIN token_routing_policies p ON p.device_id = d.id AND p.token_id = 'master' LEFT JOIN service_groups g ON g.id = COALESCE(d.service_group_id, d.default_service_group_id) " + (includeRevoked ? "" : "WHERE d.revoked_at IS NULL"))
+    .all<{ id: string; service_group_id: string | null; default_service_group_id: string | null; policy_json: string | null; selected_service_group_name: string | null }>();
+  const byId = new Map((routing.results ?? []).map(row => {
+    const selected = row.service_group_id ?? row.default_service_group_id;
+    let mode = selected === "auto" ? "auto" : selected == null || selected === "legacy" ? "legacy" : "fixed";
+    let groupIds = mode === "fixed" ? [selected!] : [];
+    if (row.policy_json !== null) {
+      try {
+        const policy = JSON.parse(row.policy_json);
+        mode = ["auto", "legacy", "fixed", "multi"].includes(policy?.mode) ? policy.mode : "unknown";
+        groupIds = Array.isArray(policy?.group_ids) ? policy.group_ids.filter((id: unknown): id is string => typeof id === "string") : [];
+      } catch { mode = "unknown"; groupIds = []; }
+    }
+    return [row.id, { routing_policy_mode: mode, routing_group_ids: groupIds, selected_service_group_id: selected, selected_service_group_name: row.selected_service_group_name }] as const;
+  }));
+  return c.json({ items: items.map(item => ({ ...item, ...byId.get(item.id) })) });
+});
+
+devicesApp.get("/choices", async (c) => {
+  const result = await c.env.DB.prepare("SELECT id, name, enabled FROM devices WHERE revoked_at IS NULL ORDER BY created_at DESC, id").all<{ id: string; name: string; enabled: number }>();
+  return c.json({ items: result.results ?? [] });
 });
 
 devicesApp.post("/", zValidator("json", CreateDeviceSchema), async (c) => {

@@ -98,7 +98,7 @@ export const adminAuth: MiddlewareHandler<{ Bindings: Env }> = async (c, next) =
   if (!payload) {
     return c.json({ error: "unauthorized" }, 401);
   }
-  const currentEpoch = await getSessionEpoch(c.env).catch(() => 0);
+  const currentEpoch = await getSessionEpoch(c.env);
   const sessionEpoch = Number.isFinite(payload.epoch) ? Number(payload.epoch) : 0;
   if (sessionEpoch !== currentEpoch) {
     return c.json({ error: "unauthorized" }, 401);

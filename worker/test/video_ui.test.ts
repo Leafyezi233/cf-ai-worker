@@ -304,7 +304,7 @@ describe("video existing-web filters and SSR", () => {
     expect(source()).toContain("saveVideoAttempt(token, next,sessionStorage)");
     expect(source()).toContain("?.video");
     expect(code.indexOf("<ConsoleVideoCard")).toBeLessThan(code.indexOf('{tab === "guide" ? ('));
-    expect(code).toContain(') : tab === "video" ? null : (');
+    expect(code).toContain(') : tab === "video" || tab === "keys" || tab === "security" ? null : (');
     expect(code).not.toContain('key={tab}');
   });
 });

@@ -28,6 +28,7 @@ vi.mock("../../web/src/hooks/useQuery", () => ({
 const notifications = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn() }));
 vi.mock("../../web/src/components/Toast", () => ({ useToast: () => notifications }));
 const requireWeb = createRequire(new URL("../../web/package.json", import.meta.url));
+vi.doMock((requireWeb as any).resolve("react-router-dom"), () => ({ useLocation: () => ({ pathname: "/monthly-passes", search: "", hash: "" }), useNavigate: () => vi.fn() }));
 const { createElement } = requireWeb("react");
 const { renderToStaticMarkup } = requireWeb("react-dom/server");
 const consolePath = "../../web/src/components/ConsoleMonthlyPass.tsx";
@@ -51,6 +52,7 @@ function account(overrides: Partial<MonthlyAccount> = {}): MonthlyAccount {
 }
 let fetchMock: ReturnType<typeof vi.fn>;
 beforeEach(() => {
+  vi.stubGlobal("window", { location: { pathname: "/admin-prefix-example/monthly-passes" } });
   fixture.data.clear(); fixture.keys = []; fixture.error = null; fixture.loading = false;
   notifications.success.mockClear(); notifications.error.mockClear();
   const storage = new Map<string, string>();
@@ -114,9 +116,9 @@ describe("monthly-pass API helpers (mock fetch, no live production requests)", (
     await monthlyPassesApi.accounts(); await monthlyPassesApi.account("d/a"); await monthlyPassesApi.issue("d/a", "p", "issue-op");
     await monthlyPassesApi.stop("s/a"); await monthlyPassesApi.renew("s/a", "renew-op"); await monthlyPassesApi.walletFallback("d/a", false);
     expect(fetchMock.mock.calls.map(([path, init]) => [path, init?.method ?? "GET"])).toEqual([
-      ["/api/monthly-passes/plans", "POST"], ["/api/monthly-passes/plans", "GET"], ["/api/monthly-passes/plans/p%2Fa", "PUT"],
-      ["/api/monthly-passes/accounts", "GET"], ["/api/monthly-passes/accounts/d%2Fa", "GET"], ["/api/monthly-passes/accounts/d%2Fa/issue", "POST"],
-      ["/api/monthly-passes/subscriptions/s%2Fa/stop", "POST"], ["/api/monthly-passes/subscriptions/s%2Fa/renew", "POST"], ["/api/monthly-passes/accounts/d%2Fa/wallet-fallback", "PUT"],
+      ["/admin-prefix-example/api/monthly-passes/plans", "POST"], ["/admin-prefix-example/api/monthly-passes/plans", "GET"], ["/admin-prefix-example/api/monthly-passes/plans/p%2Fa", "PUT"],
+      ["/admin-prefix-example/api/monthly-passes/accounts", "GET"], ["/admin-prefix-example/api/monthly-passes/accounts/d%2Fa", "GET"], ["/admin-prefix-example/api/monthly-passes/accounts/d%2Fa/issue", "POST"],
+      ["/admin-prefix-example/api/monthly-passes/subscriptions/s%2Fa/stop", "POST"], ["/admin-prefix-example/api/monthly-passes/subscriptions/s%2Fa/renew", "POST"], ["/admin-prefix-example/api/monthly-passes/accounts/d%2Fa/wallet-fallback", "PUT"],
     ]);
     expect(JSON.parse(fetchMock.mock.calls[2][1].body)).toEqual({ ...input(), enabled: 0, service_group_ids: [] });
     expect(JSON.parse(fetchMock.mock.calls[5][1].body)).toEqual({ plan_id: "p", operation_id: "issue-op" });
@@ -146,7 +148,7 @@ describe("monthly-pass API helpers (mock fetch, no live production requests)", (
   });
   it("sends confirmed admin fallback enabling and propagates admin mutation failure", async () => {
     await monthlyPassesApi.walletFallback("device-1", true, true);
-    expect(fetchMock.mock.calls[0][0]).toBe("/api/monthly-passes/accounts/device-1/wallet-fallback");
+    expect(fetchMock.mock.calls[0][0]).toBe("/admin-prefix-example/api/monthly-passes/accounts/device-1/wallet-fallback");
     expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({ enabled: true });
     fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ error: "monthly_pass_already_active" }), { status: 409 }));
     await expect(monthlyPassesApi.issue("device-1", "p1", "rejected-op")).rejects.toThrow("monthly_pass_already_active");

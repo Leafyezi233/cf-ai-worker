@@ -42,6 +42,7 @@ describe("durable core schema versions", () => {
     expect(promises.every(p => p === promises[0])).toBe(true);
     await Promise.all(promises);
     expect(d.rows("SELECT id,completed,length(checksum) AS checksum FROM cpg_schema_versions ORDER BY id")).toEqual([
+      { id: "admin-record/0001-query-indexes", completed: 1, checksum: 64 },
       { id: "core/0001-tables", completed: 1, checksum: 64 }, { id: "core/0002-columns", completed: 1, checksum: 64 }, { id: "core/0003-ready", completed: 1, checksum: 64 },
       { id: "monthly/0001-tables", completed: 1, checksum: 64 }, { id: "monthly/0002-funding", completed: 1, checksum: 64 },
       { id: "monthly/0003-operations", completed: 1, checksum: 64 }, { id: "monthly/0004-operation-apply", completed: 1, checksum: 64 }, { id: "monthly/0005-retention", completed: 1, checksum: 64 },
@@ -54,7 +55,7 @@ describe("durable core schema versions", () => {
     await ensureSchema(env(t.DB));
     expect(t.reads.length).toBe(before.reads); expect(t.batches.length).toBe(before.batches);
     const cold = instrument(d); await ensureSchema(env(cold.DB));
-    expect(cold.reads).toHaveLength(1); expect(cold.reads[0]).toContain("ORDER BY id LIMIT 12"); expect(SCHEMA_MANIFEST_READ_SQL).toContain("ORDER BY id LIMIT 4"); expect(cold.batches).toHaveLength(0);
+    expect(cold.reads).toHaveLength(1); expect(cold.reads[0]).toContain("ORDER BY id LIMIT 13"); expect(SCHEMA_MANIFEST_READ_SQL).toContain("ORDER BY id LIMIT 4"); expect(cold.batches).toHaveLength(0);
     const explain = d.rows<{ detail: string }>("EXPLAIN QUERY PLAN " + cold.reads[0]);
     expect(explain.some(r => /SEARCH.*INDEX/.test(r.detail))).toBe(true);
   });
@@ -96,7 +97,7 @@ describe("durable core schema versions", () => {
     const a = instrument(d), b = instrument(d);
     await Promise.all([migrateSchema(env(a.DB)), migrateSchema(env(b.DB))]);
     expect(d.rows("SELECT * FROM runs")).toHaveLength(1);
-    expect(d.rows("SELECT * FROM cpg_schema_versions")).toHaveLength(11);
+    expect(d.rows("SELECT * FROM cpg_schema_versions")).toHaveLength(12);
   });
 
   it.each([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12])("fails closed at batch boundary %i and safely retries", async boundary => {
@@ -109,7 +110,7 @@ describe("durable core schema versions", () => {
     expect(d.row<{ n: number }>("SELECT count(*) AS n FROM sqlite_master WHERE name='cpg_schema_versions'")!.n).toBe(boundary === 1 ? 0 : 1);
     if (boundary > 1) expect(d.rows("SELECT * FROM cpg_schema_versions")).toHaveLength(boundary - 2);
     await ensureSchema(env(DB));
-    expect(d.rows("SELECT * FROM cpg_schema_versions")).toHaveLength(11);
+    expect(d.rows("SELECT * FROM cpg_schema_versions")).toHaveLength(12);
   });
 
   it.each([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12])("handles ambiguous commit at boundary %i using durable confirmation or safe retry", async boundary => {
@@ -123,7 +124,7 @@ describe("durable core schema versions", () => {
     } } as unknown as D1Database;
     if (boundary === 1) await expect(ensureSchema(env(DB))).rejects.toThrow("lost acknowledgement");
     await ensureSchema(env(DB));
-    expect(d.rows("SELECT * FROM cpg_schema_versions")).toHaveLength(11);
+    expect(d.rows("SELECT * FROM cpg_schema_versions")).toHaveLength(12);
     expect(d.rows("SELECT * FROM runs")).toHaveLength(1);
   });
 
@@ -170,12 +171,12 @@ describe("durable core schema versions", () => {
     d.sql("CREATE INDEX idx_usage_device_sub_token ON usage(device_id,sub_token_id,created_at)");
     await ensureSchema(env(d.DB));
     resetSchemaCache(d.DB);
-    d.sql("DELETE FROM cpg_schema_versions WHERE id='core/0003-ready' OR id LIKE 'monthly/%' OR id LIKE 'usage/%' OR id LIKE 'video/%'");
+    d.sql("DELETE FROM cpg_schema_versions WHERE id='core/0003-ready' OR id LIKE 'monthly/%' OR id LIKE 'usage/%' OR id LIKE 'video/%' OR id LIKE 'admin-record/%'");
     await ensureSchema(env(d.DB));
-    expect(d.rows("SELECT * FROM cpg_schema_versions")).toHaveLength(11);
+    expect(d.rows("SELECT * FROM cpg_schema_versions")).toHaveLength(12);
   });
 
-  it.each([2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12])("rolls back SQL, claim and completion together on an in-transaction failure at boundary %i", async boundary => {
+  it.each([2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13])("rolls back SQL, claim and completion together on an in-transaction failure at boundary %i", async boundary => {
     const d = database(); seed(d); let count = 0;
     d.sql("ALTER TABLE devices DROP COLUMN password_hash");
     d.sql("CREATE TABLE injection(n INTEGER CHECK(n=0))");
@@ -196,9 +197,13 @@ describe("durable core schema versions", () => {
       expect(d.row("SELECT name FROM sqlite_master WHERE name='usage_rollup_receipts'")).not.toBeNull();
       expect(d.row("SELECT name FROM sqlite_master WHERE name='usage_rollup_raw_insert'")).toBeNull();
     }
+    if (boundary === 13) {
+      expect(d.row("SELECT name FROM sqlite_master WHERE name='idx_video_tasks_created_id'")).toBeNull();
+      expect(d.row("SELECT name FROM sqlite_master WHERE name='idx_audit_logs_action_created_id'")).toBeNull();
+    }
     if (boundary === 12) expect(d.rows<{name:string}>("PRAGMA table_info(video_tasks)").some(c=>c.name === "upstream_usage_json")).toBe(false);
     await ensureSchema(env(DB));
-    expect(d.rows("SELECT * FROM cpg_schema_versions")).toHaveLength(11);
+    expect(d.rows("SELECT * FROM cpg_schema_versions")).toHaveLength(12);
   });
 
   it.each(["throw", "malformed"])("fails closed on a %s legacy column probe, then retries", async failure => {
@@ -241,7 +246,7 @@ describe("durable core schema versions", () => {
     await ensureSchema(env(a.DB));
     expect(b.row("SELECT name FROM sqlite_master WHERE name='cpg_schema_versions'")).toBeNull();
     await ensureSchema(env(b.DB));
-    expect(b.rows("SELECT * FROM cpg_schema_versions")).toHaveLength(11);
+    expect(b.rows("SELECT * FROM cpg_schema_versions")).toHaveLength(12);
   });
 
   it("preserves exported SQL arrays and retains fail-safe pending migration contracts", () => {

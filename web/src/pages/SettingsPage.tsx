@@ -1,4 +1,4 @@
-import { useCallback, useState, useEffect } from "react";
+import { useCallback, useState, useEffect, useRef, type SetStateAction } from "react";
 import { api, fmtTime } from "../api/client";
 import type {
   BudgetConfigResponse,
@@ -23,6 +23,9 @@ import {
   IconHistory,
   IconAlertTriangle,
 } from "../components/icons";
+import AdminVideoTasks, { recordQuery, recordTimeDefaults, useAdminRecordPage } from "../components/AdminVideoTasks";
+import { useAdminFilters } from "../hooks/useAdminFilters";
+import { SettingsLocator } from "../components/SettingsLocator";
 import UsageRetentionMaintenance from "../components/UsageRetentionMaintenance";
 import { useToast } from "../components/Toast";
 import { useQuery } from "../hooks/useQuery";
@@ -45,6 +48,20 @@ interface SettingsData {
   }>;
 }
 
+function useSettingsDraft<T>(initial: T) {
+  const [value, setValue] = useState(initial);
+  const draft = useRef({ dirty: false, editVersion: 0 });
+  const edit = useCallback((next: SetStateAction<T>) => {
+    draft.current.dirty = true;
+    draft.current.editVersion++;
+    setValue(next);
+  }, []);
+  const hydrate = useCallback((next: SetStateAction<T>) => {
+    if (!draft.current.dirty) setValue(next);
+  }, []);
+  return [value, edit, hydrate, draft] as const;
+}
+
 export default function SettingsPage() {
   const toast = useToast();
 
@@ -56,7 +73,7 @@ export default function SettingsPage() {
   const [activeSnippetTab, setActiveSnippetTab] = useState<"openai" | "anthropic" | "gemini" | "curl">("openai");
   const [purging, setPurging] = useState(false);
 
-  const [budgetForm, setBudgetForm] = useState({
+  const [budgetForm, setBudgetForm, hydrateBudget, budgetDraft] = useSettingsDraft({
     monthly_budget_usd: 0,
     budget_action: "warn" as "warn" | "block",
     alert_threshold_pct: 80,
@@ -64,7 +81,7 @@ export default function SettingsPage() {
   });
   const [savingBudget, setSavingBudget] = useState(false);
 
-  const [announcementForm, setAnnouncementForm] = useState<AnnouncementConfig>({
+  const [announcementForm, setAnnouncementForm, hydrateAnnouncement, announcementDraft] = useSettingsDraft<AnnouncementConfig>({
     enabled: false,
     level: "info",
     title: "",
@@ -73,7 +90,7 @@ export default function SettingsPage() {
   });
   const [savingAnnouncement, setSavingAnnouncement] = useState(false);
 
-  const [webhookForm, setWebhookForm] = useState({
+  const [webhookForm, setWebhookForm, hydrateWebhook, webhookDraft] = useSettingsDraft({
     url: "",
     secret: "",
     events: ["budget_exceeded", "provider_error"],
@@ -81,7 +98,7 @@ export default function SettingsPage() {
   const [savingWebhook, setSavingWebhook] = useState(false);
   const [testingWebhook, setTestingWebhook] = useState(false);
 
-  const [ipForm, setIpForm] = useState<IpWhitelistConfig>({
+  const [ipForm, setIpForm, hydrateIp, ipDraft] = useSettingsDraft<IpWhitelistConfig>({
     enabled: false,
     allowed_ips: [],
     client_ip: "",
@@ -94,9 +111,18 @@ export default function SettingsPage() {
   const [rotatingProviderId, setRotatingProviderId] = useState<string | null>(null);
   const [newKeyInput, setNewKeyInput] = useState("");
 
-  const [auditLogs, setAuditLogs] = useState<AuditLogItem[]>([]);
-  const [auditTotal, setAuditTotal] = useState(0);
-  const [loadingAudit, setLoadingAudit] = useState(false);
+  const [auditDefaults] = useState(() => ({ audit_action: "", audit_actor_type: "", audit_ip: "", audit_target_type: "", audit_target_id: "", ...recordTimeDefaults("audit_") }));
+  const [auditFilters, setAuditFilter, resetAuditFilters] = useAdminFilters(auditDefaults);
+  const [auditDraft, setAuditDraft] = useState(auditFilters);
+  const auditFilterKey = JSON.stringify(auditFilters);
+  useEffect(() => setAuditDraft(JSON.parse(auditFilterKey)), [auditFilterKey]);
+  let auditQuery = "", auditInvalid = "";
+  try { auditQuery = recordQuery(auditFilters, "audit_", ["action", "actor_type", "ip", "target_type", "target_id"]); }
+  catch (err) { auditInvalid = (err as Error).message; }
+  const auditPage = useAdminRecordPage<AuditLogItem>("/api/audit-logs", auditQuery, auditInvalid);
+  const auditLogs = auditPage.items;
+  const loadingAudit = auditPage.loading;
+  const loadAuditLogs = auditPage.refresh;
   const [exportingAudit, setExportingAudit] = useState(false);
 
   const [snapshots, setSnapshots] = useState<ConfigSnapshotItem[]>([]);
@@ -124,7 +150,7 @@ export default function SettingsPage() {
   const loadIpWhitelist = useCallback(async () => {
     try {
       const res = await api.get<IpWhitelistConfig>("/api/settings/ip-whitelist");
-      setIpForm(res);
+      hydrateIp(res);
     } catch {}
   }, []);
 
@@ -136,18 +162,6 @@ export default function SettingsPage() {
     } catch {}
     finally {
       setLoadingKeyRotation(false);
-    }
-  }, []);
-
-  const loadAuditLogs = useCallback(async () => {
-    setLoadingAudit(true);
-    try {
-      const res = await api.get<{ items: AuditLogItem[]; total: number }>("/api/audit-logs?limit=30");
-      setAuditLogs(res.items || []);
-      setAuditTotal(res.total || 0);
-    } catch {}
-    finally {
-      setLoadingAudit(false);
     }
   }, []);
 
@@ -165,13 +179,12 @@ export default function SettingsPage() {
   useEffect(() => {
     loadIpWhitelist();
     loadKeyRotation();
-    loadAuditLogs();
     loadSnapshots();
-  }, [loadIpWhitelist, loadKeyRotation, loadAuditLogs, loadSnapshots]);
+  }, [loadIpWhitelist, loadKeyRotation, loadSnapshots]);
 
   useEffect(() => {
     if (budgetData) {
-      setBudgetForm({
+      hydrateBudget({
         monthly_budget_usd: budgetData.monthly_budget_usd || 0,
         budget_action: budgetData.budget_action || "warn",
         alert_threshold_pct: budgetData.alert_threshold_pct || 80,
@@ -182,7 +195,7 @@ export default function SettingsPage() {
 
   useEffect(() => {
     if (announcementData) {
-      setAnnouncementForm({
+      hydrateAnnouncement({
         enabled: Boolean(announcementData.enabled),
         level: announcementData.level || "info",
         title: announcementData.title || "",
@@ -194,7 +207,7 @@ export default function SettingsPage() {
 
   useEffect(() => {
     if (webhookData) {
-      setWebhookForm((prev) => ({
+      hydrateWebhook((prev) => ({
         ...prev,
         url: webhookData.url || "",
         events: webhookData.events || ["budget_exceeded", "provider_error"],
@@ -204,6 +217,7 @@ export default function SettingsPage() {
 
   const handleSaveBudget = async (e: React.FormEvent) => {
     e.preventDefault();
+    const submittedVersion = budgetDraft.current.editVersion;
     setSavingBudget(true);
     try {
       await api.put("/api/settings/budget", {
@@ -212,6 +226,7 @@ export default function SettingsPage() {
         alert_threshold_pct: Number(budgetForm.alert_threshold_pct) || 80,
       });
       toast.success("月度预算配置已保存");
+      if (budgetDraft.current.editVersion === submittedVersion) budgetDraft.current.dirty = false;
       await refreshBudget();
       loadAuditLogs();
     } catch (err: any) {
@@ -227,6 +242,7 @@ export default function SettingsPage() {
       toast.error("发布公告时内容不能为空");
       return;
     }
+    const submittedVersion = announcementDraft.current.editVersion;
     setSavingAnnouncement(true);
     try {
       await api.put("/api/settings/announcement", {
@@ -236,6 +252,7 @@ export default function SettingsPage() {
         message: announcementForm.message,
       });
       toast.success(announcementForm.enabled ? "公告已发布到设备控制台" : "公告已保存为未发布");
+      if (announcementDraft.current.editVersion === submittedVersion) announcementDraft.current.dirty = false;
       await refreshAnnouncement();
       loadAuditLogs();
     } catch (err: any) {
@@ -247,6 +264,7 @@ export default function SettingsPage() {
 
   const handleSaveWebhook = async (e: React.FormEvent) => {
     e.preventDefault();
+    const submittedVersion = webhookDraft.current.editVersion;
     setSavingWebhook(true);
     try {
       await api.put("/api/settings/webhook", {
@@ -255,6 +273,7 @@ export default function SettingsPage() {
         events: webhookForm.events,
       });
       toast.success("Webhook 告警配置已保存");
+      if (webhookDraft.current.editVersion === submittedVersion) webhookDraft.current.dirty = false;
       await refreshWebhook();
       loadAuditLogs();
     } catch (err: any) {
@@ -289,13 +308,15 @@ export default function SettingsPage() {
 
   const handleSaveIpWhitelist = async (e: React.FormEvent) => {
     e.preventDefault();
+    const submittedVersion = ipDraft.current.editVersion;
     setSavingIp(true);
     try {
       const res = await api.put<IpWhitelistConfig>("/api/settings/ip-whitelist", {
         enabled: ipForm.enabled,
         allowed_ips: ipForm.allowed_ips,
       });
-      setIpForm(res);
+      if (ipDraft.current.editVersion === submittedVersion) ipDraft.current.dirty = false;
+      hydrateIp(res);
       toast.success("IP 白名单控制已保存");
       loadAuditLogs();
     } catch (err: any) {
@@ -411,8 +432,12 @@ export default function SettingsPage() {
   const handleExportAuditLogs = async () => {
     setExportingAudit(true);
     try {
-      await api.download("/api/audit-logs/export", `audit-logs-${Date.now()}.csv`);
-      toast.success("审计日志 CSV 导出成功");
+      const exported = await api.download("/api/audit-logs/export?" + auditQuery + "&limit=1000", `audit-logs-${Date.now()}.csv`);
+      if (exported?.truncated) {
+        toast.error(`审计日志 CSV 仅导出前 ${exported.limit ?? 1000} 条，结果不完整；请缩小时间范围后重新导出。`);
+      } else {
+        toast.success("审计日志 CSV 导出成功");
+      }
     } catch (err: any) {
       toast.error(err.message || "导出审计日志失败");
     } finally {
@@ -481,8 +506,9 @@ console.log(message.content);`;
         </p>
       </div>
 
+      <SettingsLocator />
       { }
-      <Card
+      <Card id="settings-announcement"
         title="📢 控制台公告 (Console Announcement)"
         action={
           announcementForm.updated_at ? (
@@ -572,7 +598,7 @@ console.log(message.content);`;
       </Card>
 
       { }
-      <Card title="🛡️ IP 白名单与管理后台访问控制 (IP Whitelist)">
+      <Card id="settings-access" title="🛡️ IP 白名单与管理后台访问控制 (IP Whitelist)">
         <form onSubmit={handleSaveIpWhitelist} className="space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-100 dark:border-slate-800">
             <div>
@@ -654,7 +680,7 @@ console.log(message.content);`;
       </Card>
 
       { }
-      <Card title="🔑 API Key 轮转与生命周期追踪 (Key Lifecycle & Aging)">
+      <Card id="settings-keys" title="🔑 API Key 轮转与生命周期追踪 (Key Lifecycle & Aging)">
         <div className="space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
             <p className="text-xs text-slate-500 dark:text-slate-400">
@@ -785,27 +811,40 @@ console.log(message.content);`;
       </Card>
 
       { }
-      <Card title="📜 管理员操作审计日志 (Audit Trail)">
+      <Card id="settings-audit" title="📜 管理员操作审计日志 (Audit Trail)">
         <div className="space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
             <p className="text-xs text-slate-500 dark:text-slate-400">
-              记录所有对 Provider、Model、Device、系统配置与快照的写操作（累计 {auditTotal} 条）
+              记录所有对 Provider、Model、Device、系统配置与快照的写操作（已加载 {auditLogs.length} 条，不执行全表计数）
             </p>
             <div className="flex items-center gap-2">
-              <Button variant="outline" size="sm" onClick={handleExportAuditLogs} disabled={exportingAudit || auditLogs.length === 0}>
+              <Button variant="outline" size="sm" onClick={handleExportAuditLogs} disabled={exportingAudit || !!auditInvalid}>
                 <IconDownload />
                 <span>{exportingAudit ? "导出中…" : "导出审计 CSV"}</span>
               </Button>
-              <Button variant="outline" size="sm" onClick={() => loadAuditLogs()}>
+              <Button variant="outline" size="sm" onClick={() => loadAuditLogs()} disabled={loadingAudit}>
                 <IconRefresh />
                 <span>刷新</span>
               </Button>
             </div>
           </div>
 
-          {loadingAudit ? (
-            <Spinner text="正在获取审计日志…" />
-          ) : auditLogs.length > 0 ? (
+          <form className="grid gap-2 sm:grid-cols-3" onSubmit={event => {
+            event.preventDefault();
+            for (const key of Object.keys(auditDefaults)) setAuditFilter(key, auditDraft[key]);
+            if (Object.keys(auditDefaults).every(key => auditFilters[key] === auditDraft[key])) void loadAuditLogs();
+          }}>
+            {[["action", "审计动作（精确）"], ["actor_type", "操作人类型（精确）"], ["ip", "操作人 IP（精确）"], ["target_type", "对象类型（精确）"], ["target_id", "对象 ID（精确）"], ["from", "审计开始时间"], ["to", "审计结束时间"]].map(([field, label]) => <label key={field}>{label}
+              <Input aria-label={label} maxLength={256} type={field === "from" || field === "to" ? "datetime-local" : "text"}
+                value={auditDraft["audit_" + field]} onChange={e => setAuditDraft({ ...auditDraft, ["audit_" + field]: e.target.value })} />
+            </label>)}
+            <div className="flex flex-wrap gap-2"><Button type="submit">查询审计</Button><Button type="button" variant="ghost" onClick={() => { setAuditDraft(auditDefaults); resetAuditFilters(); }}>清空审计筛选</Button></div>
+          </form>
+          <p className="text-xs text-slate-500">默认最近 30 天；导出使用已提交的相同条件，最多 1000 条，超限请缩小时间范围。编辑条件后请点击查询。</p>
+          {auditPage.error && <div role="alert">{auditPage.error}（保留上次成功结果） <Button onClick={() => void auditPage.retry()} disabled={loadingAudit}>重试审计</Button></div>}
+          {auditPage.stale && <p role="status">下方为旧筛选结果，等待新查询成功。</p>}
+          {loadingAudit && <Spinner text="正在获取审计日志…" />}
+          {auditLogs.length > 0 ? (
             <div className="overflow-x-auto -mx-4 -my-2 sm:mx-0 sm:my-0">
               <table className="w-full text-left text-xs min-w-[700px]">
                 <thead>
@@ -851,13 +890,17 @@ console.log(message.content);`;
               </table>
             </div>
           ) : (
-            <Empty text="暂无审计操作日志记录" />
+            !loadingAudit && !auditPage.error && <Empty text="暂无审计操作日志记录" />
           )}
         </div>
       </Card>
 
+      {auditPage.capped && !auditPage.stale && <p role="status">已展示 1000 条审计记录。为控制页面开销，请缩小筛选范围，或使用导出（最多 1000 条，截断时会提示）；这不是全部匹配记录。</p>}
+      {auditPage.cursor && !auditPage.capped && !auditPage.stale && <Button disabled={loadingAudit || !!auditPage.error} onClick={() => void auditPage.more()}>加载更多审计</Button>}
+      <div id="settings-tasks"><AdminVideoTasks /></div>
+
       { }
-      <Card title="📑 OpenAPI 3.0 规范文档与开发工具集成 (OpenAPI Spec)">
+      <Card id="settings-openapi" title="📑 OpenAPI 3.0 规范文档与开发工具集成 (OpenAPI Spec)">
         <div className="space-y-3">
           <p className="text-xs text-slate-500 dark:text-slate-400">
             网关已自动基于您当前启用的模型与服务商，动态生成完整的 OpenAPI 3.0.3 标准规范。可直接导入 Postman、Swagger UI、Scalar、Apifox 或 API 调试客户端。
@@ -883,7 +926,7 @@ console.log(message.content);`;
       </Card>
 
       { }
-      <Card title="📸 配置版本快照与历史回滚 (Config Snapshots & Rollback)">
+      <Card id="settings-snapshots" title="📸 配置版本快照与历史回滚 (Config Snapshots & Rollback)">
         <div className="space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
             <p className="text-xs text-slate-500 dark:text-slate-400">
@@ -979,7 +1022,7 @@ console.log(message.content);`;
       </Card>
 
       { }
-      <Card title="💰 月度预算与超额熔断 (Budget & Quota Limits)">
+      <Card id="settings-budget" title="💰 月度预算与超额熔断 (Budget & Quota Limits)">
         <form onSubmit={handleSaveBudget} className="space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div>
@@ -1032,7 +1075,7 @@ console.log(message.content);`;
       </Card>
 
       { }
-      <Card title="🔔 Webhook 告警与事件通知 (Webhook Alerts)">
+      <Card id="settings-webhook" title="🔔 Webhook 告警与事件通知 (Webhook Alerts)">
         <form onSubmit={handleSaveWebhook} className="space-y-4">
           <div>
             <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
@@ -1064,10 +1107,10 @@ console.log(message.content);`;
         </form>
       </Card>
 
-      <UsageRetentionMaintenance />
+      <div id="settings-retention"><UsageRetentionMaintenance /></div>
 
       { }
-      <Card title="⚡ 多级响应缓存优化 (Multi-Tier Caching)">
+      <Card id="settings-cache" title="⚡ 多级响应缓存优化 (Multi-Tier Caching)">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="space-y-1">
             <div className="flex items-center gap-2">
@@ -1105,7 +1148,7 @@ console.log(message.content);`;
       </Card>
 
       { }
-      <Card title="💻 客户端接入指南 (SDK Code Snippets)">
+      <Card id="settings-sdk" title="💻 客户端接入指南 (SDK Code Snippets)">
         <div className="space-y-4">
           <div className="flex items-center gap-2 border-b border-slate-100 dark:border-slate-800 pb-3 overflow-x-auto whitespace-nowrap">
             <button

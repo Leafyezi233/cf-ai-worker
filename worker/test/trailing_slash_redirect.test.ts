@@ -53,9 +53,9 @@ describe("trailing-slash normalization for API callers", () => {
     expect(res.headers.get("Location")).toBe("https://gw.example.com/v1/dashboard/billing/usage?start=1&end=2");
   });
 
-  it("leaves browser HTML navigations alone (pages own their trailing slash, e.g. /me/)", async () => {
+  it("leaves browser HTML navigations alone (pages own their trailing slash, e.g. /console/)", async () => {
     const res = await app.fetch(
-      new Request("https://gw.example.com/me/", {
+      new Request("https://gw.example.com/console/", {
         headers: { Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8" },
       }),
       makeEnv(),

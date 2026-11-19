@@ -2,18 +2,20 @@ import { useState, type ReactNode, type SelectHTMLAttributes, type InputHTMLAttr
 import { IconCheck, IconCopy } from "./icons";
 
 export function Card({
+  id,
   title,
   action,
   children,
   className = "",
 }: {
+  id?: string;
   title?: ReactNode;
   action?: ReactNode;
   children: ReactNode;
   className?: string;
 }) {
   return (
-    <div className={`bg-white dark:bg-slate-900 rounded-xl border border-slate-200/60 dark:border-slate-800 shadow-xs hover:shadow-sm transition-shadow overflow-hidden ${className}`}>
+    <div id={id} className={`bg-white dark:bg-slate-900 rounded-xl border border-slate-200/60 dark:border-slate-800 shadow-xs hover:shadow-sm transition-shadow overflow-hidden ${className}`}>
       {title || action ? (
         <div className="px-4 py-3 sm:px-5 sm:py-3.5 border-b border-slate-100 dark:border-slate-800/80 flex items-center justify-between gap-2">
           {title ? <div className="text-[13px] font-medium tracking-wide text-slate-500 dark:text-slate-400">{title}</div> : <div />}

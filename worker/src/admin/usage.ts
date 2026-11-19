@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { HTTPException } from "hono/http-exception";
 import type { Env, MonthlyReport, UsageRow } from "../types";
 import {
   listUsage,
@@ -18,6 +19,7 @@ import { sanitizeCsvCell } from "../utils/csv";
 
 export const usageApp = new Hono<{ Bindings: Env }>();
 usageApp.onError((error, c) => {
+  if (error instanceof HTTPException) return error.getResponse();
   if (error.message === "usage_history_granularity_required") return c.json({ error: error.message, granularity: "hour" }, 400);
   throw error;
 });
@@ -291,50 +293,73 @@ usageApp.get("/cost-analytics", async (c) => {
   return c.json(analytics);
 });
 
+const MAX_USAGE_WINDOW_MS = 31 * DAY_MS;
+function usageBadQuery(message: string): never { throw new HTTPException(400, { message }); }
+function usageInteger(value: string | undefined, fallback: number): number {
+  if (value === undefined) return fallback;
+  if (!/^\d+$/.test(value) || !Number.isSafeInteger(Number(value))) usageBadQuery("invalid_usage_number");
+  return Number(value);
+}
+export function parseUsageQuery(q: Record<string, string>, exporting = false) {
+  let cursor: { from: number; to: number; created_at: number; id: number; scope: string } | undefined;
+  if (q.cursor) {
+    try {
+      if (q.cursor.length > 4096) throw new Error();
+      cursor = JSON.parse(q.cursor);
+      if (!cursor || ![cursor.from, cursor.to, cursor.created_at, cursor.id].every(n => Number.isSafeInteger(n) && n >= 0) || cursor.id < 1 || typeof cursor.scope !== "string") throw new Error();
+    } catch { usageBadQuery("invalid_usage_cursor"); }
+  }
+  const to = usageInteger(q.to, cursor?.to ?? Date.now());
+  const from = usageInteger(q.from, cursor?.from ?? Math.max(0, to - DAY_MS));
+  if (from > to || to - from > MAX_USAGE_WINDOW_MS) usageBadQuery("usage_window_must_be_at_most_31_days");
+  const filters: { provider_id?: string; model?: string; device_id?: string; service_group_id?: string; request_id?: string; status?: "success" | "error" | number } = {};
+  for (const key of ["provider_id", "model", "device_id", "service_group_id", "request_id"] as const) {
+    const value = q[key]?.trim();
+    if (value && value.length > 256) usageBadQuery("usage_filter_too_long");
+    if (value) filters[key] = value;
+  }
+  if (q.status) {
+    if (q.status === "success" || q.status === "error") filters.status = q.status;
+    else if (/^[1-5]\d{2}$/.test(q.status)) filters.status = Number(q.status);
+    else usageBadQuery("invalid_usage_status");
+  }
+  const scope = JSON.stringify(filters);
+  if (cursor && (cursor.from !== from || cursor.to !== to || cursor.scope !== scope || cursor.created_at < from || cursor.created_at > to)) usageBadQuery("usage_cursor_scope_mismatch");
+  const limit = Math.max(1, Math.min(usageInteger(q.limit, exporting ? 5000 : 50), exporting ? 20000 : 200));
+  const offset = usageInteger(q.offset, 0);
+  if (offset > 10000) usageBadQuery("usage_offset_limit_use_cursor");
+  if (cursor && offset) usageBadQuery("usage_cursor_offset_conflict");
+  return { from, to, ...filters, cursor, limit, offset, scope };
+}
+function usageNextCursor(opts: ReturnType<typeof parseUsageQuery>, last: UsageRow | undefined, hasMore: boolean) {
+  return hasMore && last ? JSON.stringify({ from: opts.from, to: opts.to, scope: opts.scope, created_at: last.created_at, id: last.id }) : null;
+}
 usageApp.get("/export", async (c) => {
-  const q = c.req.query();
-  const limit = Math.min(parseInt(q.limit || "5000", 10) || 5000, 20000);
-  const toNum = (s?: string) => (s ? parseInt(s, 10) : undefined);
-
-  const items = await listUsage(c.env, {
-    from: toNum(q.from),
-    to: toNum(q.to),
-    provider_id: q.provider_id || undefined,
-    model: q.model || undefined,
-    device_id: q.device_id || undefined,
-    limit,
-    offset: 0,
-  });
-
-  const csv = formatUsageCsv(items);
-  const nowStr = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
-  const filename = `usage-export-${nowStr}.csv`;
-
-  return new Response(csv, {
+  const opts = parseUsageQuery(c.req.query(), true);
+  const rows = await listUsage(c.env, { ...opts, limit: opts.limit + 1 });
+  const items = rows.slice(0, opts.limit);
+  const hasMore = rows.length > opts.limit;
+  const filename = "usage-export-" + opts.from + "-" + opts.to + ".csv";
+  return new Response(formatUsageCsv(items), {
     status: 200,
     headers: {
       "Content-Type": "text/csv; charset=utf-8",
-      "Content-Disposition": `attachment; filename="${filename}"`,
-      "Cache-Control": "no-cache",
+      "Content-Disposition": 'attachment; filename="' + filename + '"',
+      "Cache-Control": "no-store",
+      "X-Usage-From": String(opts.from), "X-Usage-To": String(opts.to),
+      "X-Usage-Truncated": String(hasMore),
+      "X-Usage-Next-Cursor": encodeURIComponent(usageNextCursor(opts, items[items.length - 1], hasMore) || ""),
     },
   });
 });
 
 usageApp.get("/", async (c) => {
-  const q = c.req.query();
-  const limit = Math.min(parseInt(q.limit || "50", 10) || 50, 200);
-  const offset = Math.max(parseInt(q.offset || "0", 10) || 0, 0);
-  const toNum = (s?: string) => (s ? parseInt(s, 10) : undefined);
-  const items = await listUsage(c.env, {
-    from: toNum(q.from),
-    to: toNum(q.to),
-    provider_id: q.provider_id || undefined,
-    model: q.model || undefined,
-    device_id: q.device_id || undefined,
-    limit,
-    offset,
-  });
-  return c.json({ items, limit, offset });
+  const opts = parseUsageQuery(c.req.query());
+  const rows = await listUsage(c.env, { ...opts, limit: opts.limit + 1 });
+  const items = rows.slice(0, opts.limit);
+  const has_more = rows.length > opts.limit;
+  return c.json({ items, limit: opts.limit, offset: opts.offset, from: opts.from, to: opts.to, has_more,
+    next_cursor: usageNextCursor(opts, items[items.length - 1], has_more), scope: "retained_raw_details" });
 });
 
 usageApp.get("/stats", async (c) => {

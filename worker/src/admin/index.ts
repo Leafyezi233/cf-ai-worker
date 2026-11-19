@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { handleHttpError } from "../utils/http-errors";
 import type { Env } from "../types";
 import { adminAuth } from "../middleware/adminAuth";
 import { authApp } from "./auth";
@@ -20,6 +21,7 @@ import { monthlyPassesApp } from "./monthly-passes";
 import { usageRetentionApp } from "./usage-retention";
 
 export const adminApp = new Hono<{ Bindings: Env }>();
+adminApp.onError(handleHttpError);
 
 adminApp.get("/health", (c) => c.json({ ok: true, service: "personal-ai-gateway" }));
 

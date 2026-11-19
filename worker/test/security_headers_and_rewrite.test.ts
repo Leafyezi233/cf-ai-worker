@@ -208,7 +208,7 @@ describe("security headers", () => {
     } as unknown as Env;
 
     const res = await app.fetch(
-      new Request("https://gateway.example.com/models", { method: "GET", headers: { Accept: "text/html" } }),
+      new Request("https://gateway.example.com/admin-prefix-example/models", { method: "GET", headers: { Accept: "text/html" } }),
       mockEnv,
     );
     expect(res.status).toBe(200);

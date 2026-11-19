@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { createRealD1, type RealD1 } from "./helpers/realD1";
-import { DEVICE_ID, makeEnv, seedDevice, seedModel, seedProvider } from "./helpers/realGatewayEnv";
+import { DEVICE_ID, makeEnv, seedDevice, seedModel, seedProvider, seedGroup, seedGroupMembers } from "./helpers/realGatewayEnv";
 import { ensureSchema } from "../src/db/schema";
 import { getServiceGroupModel } from "../src/db/service_groups";
 import { projectServiceModels, resolveServiceRoute } from "../src/gateway/service_groups";
@@ -58,4 +58,54 @@ it.each(["disabled", "revoked", "missing"])("%s group fails closed without legac
   const legacy = vi.fn(async () => []);
   await expect(projectServiceModels(env, device(), legacy)).rejects.toMatchObject({ status: kind === "revoked" ? 403 : 503 });
   expect(legacy).not.toHaveBeenCalled();
+});
+
+function groupedRoute(config: string) {
+  seedModel(d, { id: "model_b", model_name: "upstream-b", config_json: '{"model_rewrite":"member-b","retained":true}' });
+  seedGroup(d, { config_json: config });
+  seedGroupMembers(d, "grp_a", ["model_a", "model_b"]);
+  d.sql("UPDATE service_group_models SET target_type='group',target_id='grp_a'");
+}
+it("keeps group parsing independent of member count and preserves member configuration and database rows", async () => {
+  const config = '{"model_rewrite":"group-wins","sentinel":"cpu3-group"}';
+  groupedRoute(config);
+  const before = d.rows("SELECT id,config_json FROM models ORDER BY id");
+  const realParse = JSON.parse;
+  let rewriteParses = 0;
+  vi.spyOn(JSON, "parse").mockImplementation((text, reviver) => {
+    const caller = new Error().stack?.split("\n").find(line => /[\\/]src[\\/]/.test(line));
+    if (text === config && caller?.includes("buildRoute")) rewriteParses++;
+    return realParse(text, reviver);
+  });
+  const route = await resolveServiceRoute(env, device(), "shared");
+  expect(rewriteParses).toBe(1);
+  expect(route?.members).toHaveLength(2);
+  expect(route?.members.map(m => JSON.parse(m.config_json!))).toEqual([
+    { model_rewrite: "group-wins" }, { model_rewrite: "group-wins", retained: true }
+  ]);
+  expect(d.rows("SELECT id,config_json FROM models ORDER BY id")).toEqual(before);
+  const ids = ["model_a", "model_b"];
+  for (let i = 0; i < 18; i++) ids.push(seedModel(d, { id: "extra-" + i }));
+  seedGroupMembers(d, "grp_a", ids);
+  rewriteParses = 0;
+  expect((await resolveServiceRoute(env, device(), "shared"))?.members).toHaveLength(20);
+  expect(rewriteParses).toBe(1);
+  seedGroupMembers(d, "grp_a", ["model_a", "model_b"]);
+  d.sql("UPDATE model_groups SET config_json=? WHERE id='grp_a'", '{"model_rewrite":"changed"}');
+  const changed = await resolveServiceRoute(env, device(), "shared");
+  expect(changed?.members.map(m => JSON.parse(m.config_json!).model_rewrite)).toEqual(["changed", "changed"]);
+});
+it.each(['{}', '{"model_rewrite":" "}', '{"model_rewrite":7}'])("preserves member then upstream fallback for %s", async config => {
+  groupedRoute(config);
+  const route = await resolveServiceRoute(env, device(), "shared");
+  expect(route?.members.map(m => JSON.parse(m.config_json!).model_rewrite)).toEqual(["gw-primary", "member-b"]);
+});
+it.each(['{bad', 'null'])("invalid group configuration fails closed: %s", async config => {
+  groupedRoute(config);
+  await expect(resolveServiceRoute(env, device(), "shared")).rejects.toMatchObject({ status: 503 });
+});
+it("invalid member configuration still fails closed", async () => {
+  groupedRoute('{"model_rewrite":"group-wins"}');
+  d.sql("UPDATE models SET config_json='{bad' WHERE id='model_b'");
+  await expect(resolveServiceRoute(env, device(), "shared")).rejects.toMatchObject({ status: 503 });
 });

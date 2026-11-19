@@ -81,39 +81,24 @@ function PolicyTargetPanel({ target, label, onChanged }: { target: string; label
   const [data, setData] = useState<ConsolePolicyResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [model, setModel] = useState("");
-  const [preview, setPreview] = useState<ConsoleRoutingPreview | null>(null);
-  const [previewError, setPreviewError] = useState<string | null>(null);
-  const [previewLoading, setPreviewLoading] = useState(false);
   const alive = useRef(false);
-  const previewSequence = useRef(0);
   useEffect(() => {
     alive.current = true;
     let current = true;
     loadConsoleTokenPolicy(target).then(value => { if (current) { setData(value); setError(null); } })
       .catch(err => { if (current) setError(err instanceof Error ? err.message : "策略加载失败"); })
       .finally(() => { if (current) setLoading(false); });
-    return () => { current = false; alive.current = false; previewSequence.current++; };
+    return () => { current = false; alive.current = false; };
   }, [target]);
   const save = async (policy: TokenRoutingPolicy | null) => {
     setError(null);
     try {
       const value = await saveConsoleTokenPolicy(target, policy);
-      if (alive.current) { setData(value); setPreview(null); previewSequence.current++; setPreviewLoading(false); onChanged?.(); }
+      if (alive.current) { setData(value); onChanged?.(); }
     } catch (err) {
       if (alive.current) setError(err instanceof Error ? err.message : "策略保存或刷新失败，请重新加载确认。");
       throw err;
     }
-  };
-  const runPreview = async () => {
-    const sequence = ++previewSequence.current;
-    setPreview(null); setPreviewError(null); setPreviewLoading(true);
-    try {
-      const value = await loadConsoleRoutingPreview(target, model);
-      if (alive.current && sequence === previewSequence.current) setPreview(value);
-    } catch (err) {
-      if (alive.current && sequence === previewSequence.current) setPreviewError(err instanceof Error ? err.message : "解析预览失败");
-    } finally { if (alive.current && sequence === previewSequence.current) setPreviewLoading(false); }
   };
   return <div className="space-y-4">
     <TokenPolicyEditor target={target} label={target === "account" ? "账户默认路由策略" : target === "master" ? "主 Token 路由策略" : label + " 路由策略"}
@@ -126,36 +111,82 @@ function PolicyTargetPanel({ target, label, onChanged }: { target: string; label
         .catch(err => { if (alive.current) setError(err instanceof Error ? err.message : "策略加载失败"); })
         .finally(() => { if (alive.current) setLoading(false); });
     }}>重新加载策略</Button>}
+
+  </div>;
+}
+
+
+function RoutingPreviewPanel({ target, label }: { target: string; label: string }) {
+  const [model, setModel] = useState("");
+  const [preview, setPreview] = useState<ConsoleRoutingPreview | null>(null);
+  const [previewError, setPreviewError] = useState<string | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const alive = useRef(false);
+  const previewSequence = useRef(0);
+  useEffect(() => {
+    alive.current = true;
+    return () => { alive.current = false; previewSequence.current++; };
+  }, []);
+  const runPreview = async () => {
+    const sequence = ++previewSequence.current;
+    setPreview(null); setPreviewError(null); setPreviewLoading(true);
+    try {
+      const value = await loadConsoleRoutingPreview(target, model);
+      if (alive.current && sequence === previewSequence.current) setPreview(value);
+    } catch (err) {
+      if (alive.current && sequence === previewSequence.current) setPreviewError(err instanceof Error ? err.message : "解析预览失败");
+    } finally { if (alive.current && sequence === previewSequence.current) setPreviewLoading(false); }
+  };
+  return (
     <section aria-label="只读路由解析预览" className="space-y-2 border-t border-slate-200 dark:border-slate-700 pt-3">
       <h3 className="font-medium">只读路由解析预览 · {label}</h3>
-      <p className="text-sm">预览已保存策略，不调用上游、不计费、不占生成 RPM。真实请求仍重查权限、协议、可用性及价格，不使用过时预览。</p>
+      <p className="text-sm">仅预览。</p>
       <label className="block text-sm">公开调用名（含兼容名）
         <Input aria-label="预览公开调用名" value={model} onChange={event => {
           setModel(event.target.value); setPreview(null); setPreviewError(null); previewSequence.current++; setPreviewLoading(false);
         }} placeholder="输入客户端 model 字段" />
       </label>
-      <Button type="button" variant="secondary" disabled={!data || !model.trim() || previewLoading} onClick={runPreview}>
+      <Button type="button" variant="secondary" disabled={!model.trim() || previewLoading} onClick={runPreview}>
         {previewLoading ? "正在只读解析…" : "解析已保存策略"}
       </Button>
       {previewError && <p role="alert">{previewError}</p>}
       {preview && <ConsoleRoutingPreviewResult preview={preview} />}
     </section>
-  </div>;
+  );
 }
 
 export function ConsoleTokenPolicies({ tokens, onChanged }: ConsoleTokenPoliciesProps) {
   const targets = policyTargets(tokens);
-  const [selected, setSelected] = useState("account");
-  const active = targets.find(target => target.id === selected) || targets[0];
-  return <Card title="令牌调用策略与模型范围">
+  const [selected, setSelected] = useState("");
+  const [previewTarget, setPreviewTarget] = useState("");
+  const [savedVersion, setSavedVersion] = useState(0);
+  const previewActive = targets.find(target => target.id === previewTarget);
+  const active = targets.find(target => target.id === selected);
+  return <div className="space-y-4"><Card title="令牌调用策略与模型范围">
     <div className="space-y-4">
-      <p className="text-sm">账户默认是主 Token 和子 Token 的共同继承来源；子 Token 不继承主 Token 的独立覆盖。只加载当前选择的编辑器。</p>
+      <p className="text-sm">先选择要设置的对象。主 Token 和子 Token 都可使用账户默认设置，也可各自单独设置；子 Token 不会跟随主 Token 的单独设置。</p>
       <label className="block text-sm">编辑对象
-        <Select aria-label="策略编辑对象" value={active.id} onChange={event => setSelected(event.target.value)}>
+        <Select aria-label="策略编辑对象" value={active?.id || ""} onChange={event => setSelected(event.target.value)}>
+          <option value="">请选择编辑对象…</option>
           {targets.map(target => <option key={target.id} value={target.id}>{target.label}</option>)}
         </Select>
       </label>
-      <PolicyTargetPanel key={active.id} target={active.id} label={active.label} onChanged={onChanged} />
+      {active ? <section aria-label={active.label + "设置"} className="space-y-4 rounded-xl border border-slate-200 bg-slate-50/50 p-4 dark:border-slate-700 dark:bg-slate-900/30 sm:p-5">
+        <h3 className="font-medium">{active.label}设置</h3>
+        <PolicyTargetPanel key={active.id} target={active.id} label={active.label} onChanged={() => { setSavedVersion(version => version + 1); onChanged?.(); }} />
+      </section> : <p className="text-sm text-slate-500">选择后将在下方展开该对象的设置。</p>}
     </div>
-  </Card>;
+  </Card>
+  <Card title="只读路由解析预览">
+    <div className="space-y-4">
+      <p className="text-sm text-slate-500">仅预览已保存的策略。</p>
+      <label className="block text-sm">预览对象
+        <Select aria-label="路由预览对象" value={previewActive?.id || ""} onChange={event => setPreviewTarget(event.target.value)}>
+          <option value="">请选择预览对象…</option>
+          {targets.map(target => <option key={target.id} value={target.id}>{target.label}</option>)}
+        </Select>
+      </label>
+      {previewActive && <RoutingPreviewPanel key={previewActive.id + ":" + savedVersion} target={previewActive.id} label={previewActive.label} />}
+    </div>
+  </Card></div>;
 }

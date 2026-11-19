@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
 import { createRequire } from "node:module";
 import { readFileSync } from "node:fs";
 const apiPath = "../../web/src/api/videoDiagnostics";
@@ -9,6 +9,7 @@ const requireWeb = createRequire(new URL("../../web/package.json", import.meta.u
 const { createElement } = requireWeb("react");
 const { renderToStaticMarkup } = requireWeb("react-dom/server");
 const result = (armed = true) => ({ ok: true, device_id: "dev_account", armed, enabled_until: armed ? Date.now() + 86400000 : null, retention_days: 7 });
+beforeEach(() => { vi.stubGlobal("window", { location: { pathname: "/admin-prefix-example/devices" } }); });
 afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
 describe("administrator video diagnostic controls", () => {
@@ -19,7 +20,7 @@ describe("administrator video diagnostic controls", () => {
     expect(response.armed).toBe(operation === "arm");
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const [path, init] = fetchMock.mock.calls[0] as unknown as [string, { method: string; credentials: string; body: string }];
-    expect(path).toBe("/api/video-tasks/diagnostics/" + operation);
+    expect(path).toBe("/admin-prefix-example/api/video-tasks/diagnostics/" + operation);
     expect(init.method).toBe("POST");
     expect(init.credentials).toBe("include");
     expect(JSON.parse(init.body)).toEqual({ device_id: "dev_account" });

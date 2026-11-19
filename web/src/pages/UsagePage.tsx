@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { api, fmtNum, fmtTime } from "../api/client";
 import type {
   Provider,
@@ -17,9 +17,34 @@ import {
   IconInfo,
 } from "../components/icons";
 import { useToast } from "../components/Toast";
-import { useQuery, getCacheData, setCacheData } from "../hooks/useQuery";
+import { useQuery } from "../hooks/useQuery";
+import { useLocation, useNavigate } from "react-router-dom";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+const MAX_VISIBLE_LOGS = 1000;
+const LOG_DEFAULTS = { range: "24h", provider: "", model: "", device: "", status: "", requestid: "", servicegroup: "" };
+type LogFilters = typeof LOG_DEFAULTS;
+type LogPage = { items: UsageItem[]; has_more: boolean; next_cursor: string | null };
+function readLogFilters(search: string): LogFilters {
+  const q = new URLSearchParams(search);
+  const values = { ...LOG_DEFAULTS };
+  for (const key of Object.keys(values) as (keyof LogFilters)[]) values[key] = q.get("list_" + key) ?? values[key];
+  if (!["today", "24h", "7d", "30d"].includes(values.range)) values.range = "24h";
+  return values;
+}
+function logSnapshot(filters: LogFilters) {
+  const to = Date.now();
+  const span = filters.range === "30d" ? 30 * DAY_MS : filters.range === "7d" ? 7 * DAY_MS : DAY_MS;
+  const midnight = new Date(to); midnight.setHours(0, 0, 0, 0);
+  if (filters.range === "7d") midnight.setDate(midnight.getDate() - 6);
+  if (filters.range === "30d") midnight.setDate(midnight.getDate() - 29);
+  const start = filters.range === "24h" ? to - span : midnight.getTime();
+  const q = new URLSearchParams({ from: String(start), to: String(to) });
+  for (const [key, field] of [["provider", "provider_id"], ["model", "model"], ["device", "device_id"], ["status", "status"], ["requestid", "request_id"], ["servicegroup", "service_group_id"]] as const) {
+    if (filters[key].trim()) q.set(field, filters[key].trim());
+  }
+  return q.toString();
+}
 
 export default function UsagePage() {
   const toast = useToast();
@@ -31,11 +56,45 @@ export default function UsagePage() {
   }, []);
   const { data: providers = [] } = useQuery("providers-list", fetchProviders);
 
-  const [range, setRange] = useState("24h");
-  const [providerId, setProviderId] = useState("");
-  const [model, setModel] = useState("");
-  const [items, setItems] = useState<UsageItem[]>(() => getCacheData("usage-page-items") || []);
-  const [loading, setLoading] = useState(() => !getCacheData("usage-page-items"));
+  const location = useLocation();
+  const navigate = useNavigate();
+  const [draft, setDraft] = useState(() => readLogFilters(location.search));
+  const { range, provider: providerId, model } = draft;
+  const setRange = (value: string) => setDraft(d => ({ ...d, range: value }));
+  const setProviderId = (value: string) => setDraft(d => ({ ...d, provider: value }));
+  const setModel = (value: string) => setDraft(d => ({ ...d, model: value }));
+  const [query, setQuery] = useState(() => logSnapshot(readLogFilters(location.search)));
+  const [items, setItems] = useState<UsageItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadedQuery, setLoadedQuery] = useState("");
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const logsSequence = useRef(0);
+  const morePending = useRef(false);
+  const monthlySequence = useRef(0);
+  const analyticsSequence = useRef(0);
+  const [reportError, setReportError] = useState("");
+  const [analyticsError, setAnalyticsError] = useState("");
+  const [reportMonth, setReportMonth] = useState("");
+  const [loadedAnalyticsRange, setLoadedAnalyticsRange] = useState("");
+  const [observedSearch, setObservedSearch] = useState(location.search);
+  if (observedSearch !== location.search) {
+    const values = readLogFilters(location.search);
+    setObservedSearch(location.search);
+    setDraft(values);
+    logsSequence.current++;
+    setQuery(logSnapshot(values));
+  }
+  const applyFilters = (values = draft) => {
+    const q = new URLSearchParams(location.search);
+    for (const key of Object.keys(LOG_DEFAULTS) as (keyof LogFilters)[]) {
+      if (values[key] === LOG_DEFAULTS[key]) q.delete("list_" + key);
+      else q.set("list_" + key, values[key].trim());
+    }
+    const search = q.toString() ? "?" + q.toString() : "";
+    logsSequence.current++;
+    if (search === location.search) setQuery(logSnapshot(values));
+    else navigate({ pathname: location.pathname, search, hash: location.hash }, { replace: true });
+  };
   const [loadingMore, setLoadingMore] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [hasMore, setHasMore] = useState(false);
@@ -53,6 +112,14 @@ export default function UsagePage() {
   const [costAnalytics, setCostAnalytics] = useState<CostAnalytics | null>(null);
   const [loadingAnalytics, setLoadingAnalytics] = useState(false);
 
+  const scopes = useRef({ logs: "", monthly: "", analytics: "" });
+  const logScope = activeTab + ":" + query;
+  const monthScope = activeTab + ":" + selectedMonth;
+  const analyticsScope = activeTab + ":" + analyticsRange;
+  if (scopes.current.logs !== logScope) { scopes.current.logs = logScope; logsSequence.current++; }
+  if (scopes.current.monthly !== monthScope) { scopes.current.monthly = monthScope; monthlySequence.current++; }
+  if (scopes.current.analytics !== analyticsScope) { scopes.current.analytics = analyticsScope; analyticsSequence.current++; }
+
   const monthOptions = Array.from({ length: 12 }, (_, i) => {
     const d = new Date();
     d.setUTCMonth(d.getUTCMonth() - i);
@@ -61,75 +128,64 @@ export default function UsagePage() {
     return { val, label };
   });
 
-  const buildQuery = useCallback(
-    (offset: number) => {
-      const q = new URLSearchParams();
-      q.set("limit", "50");
-      if (offset) q.set("offset", String(offset));
-      if (range !== "all") {
-        const span = range === "7d" ? 7 * DAY_MS : range === "30d" ? 30 * DAY_MS : DAY_MS;
-        q.set("from", String(Date.now() - span));
-      }
-      if (providerId) q.set("provider_id", providerId);
-      if (model.trim()) q.set("model", model.trim());
-      return q.toString();
-    },
-    [range, providerId, model]
-  );
-
   const refreshLogs = useCallback(async () => {
-    if (!getCacheData("usage-page-items")) setLoading(true);
+    const sequence = ++logsSequence.current;
+    setLoading(true);
+    setLoadingMore(false);
+    morePending.current = false;
+    setHasMore(false);
     setError("");
     try {
-      const res = await api.get<{ items: UsageItem[] }>(`/api/usage?${buildQuery(0)}`);
+      const res = await api.get<LogPage>(`/api/usage?${query}&limit=50`);
+      if (sequence !== logsSequence.current) return;
       setItems(res.items || []);
-      setCacheData("usage-page-items", res.items || []);
-      setHasMore((res.items || []).length === 50);
+      setLoadedQuery(query);
+      setNextCursor(res.next_cursor);
+      setHasMore(res.has_more);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "加载日志失败");
+      if (sequence === logsSequence.current) setError(err instanceof Error ? err.message : "加载日志失败");
     } finally {
-      setLoading(false);
+      if (sequence === logsSequence.current) setLoading(false);
     }
-  }, [buildQuery]);
+  }, [query]);
 
   const loadMonthlyReport = useCallback(async (m: string) => {
+    const sequence = ++monthlySequence.current;
+    setReportError("");
     setLoadingReport(true);
     try {
       const res = await api.get<MonthlyReport>(`/api/usage/monthly-report?month=${m}`);
+      if (sequence !== monthlySequence.current) return;
       setMonthlyReport(res);
+      setReportMonth(m);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "获取月度账单失败");
+      if (sequence === monthlySequence.current) setReportError(err instanceof Error ? err.message : "获取月度账单失败");
     } finally {
-      setLoadingReport(false);
+      if (sequence === monthlySequence.current) setLoadingReport(false);
     }
-  }, [toast]);
+  }, []);
 
   const loadCostAnalytics = useCallback(async (r: string) => {
+    const sequence = ++analyticsSequence.current;
+    setAnalyticsError("");
     setLoadingAnalytics(true);
     try {
       const res = await api.get<CostAnalytics>(`/api/usage/cost-analytics?range=${r}`);
+      if (sequence !== analyticsSequence.current) return;
       setCostAnalytics(res);
+      setLoadedAnalyticsRange(r);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "获取成本分析数据失败");
+      if (sequence === analyticsSequence.current) setAnalyticsError(err instanceof Error ? err.message : "获取成本分析数据失败");
     } finally {
-      setLoadingAnalytics(false);
+      if (sequence === analyticsSequence.current) setLoadingAnalytics(false);
     }
-  }, [toast]);
+  }, []);
 
   const handleExportCsv = async () => {
     setExporting(true);
     try {
-      const q = new URLSearchParams();
-      q.set("limit", "10000");
-      if (range !== "all") {
-        const span = range === "7d" ? 7 * DAY_MS : range === "30d" ? 30 * DAY_MS : DAY_MS;
-        q.set("from", String(Date.now() - span));
-      }
-      if (providerId) q.set("provider_id", providerId);
-      if (model.trim()) q.set("model", model.trim());
-
-      await api.download(`/api/usage/export?${q.toString()}`, `usage-export-${range}.csv`);
-      toast.success("用量明细 CSV 已成功导出");
+      await api.download(`/api/usage/export?${query}&limit=20000`, "usage-export.csv");
+      toast.success("已导出同一时间快照的明细（最多 20,000 条，超出请缩小时间范围）");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "导出 CSV 失败");
     } finally {
@@ -166,37 +222,43 @@ export default function UsagePage() {
   };
 
   const loadMore = async () => {
+    if (morePending.current || loading || loadedQuery !== query || !nextCursor || !hasMore || items.length >= MAX_VISIBLE_LOGS) return;
+    morePending.current = true;
+    const sequence = logsSequence.current;
     setLoadingMore(true);
     try {
-      const res = await api.get<{ items: UsageItem[] }>(`/api/usage?${buildQuery(items.length)}`);
-      setItems((prev) => {
-        const updated = [...prev, ...(res.items || [])];
-        setCacheData("usage-page-items", updated);
-        return updated;
+      const res = await api.get<LogPage>(`/api/usage?${query}&limit=50&cursor=${encodeURIComponent(nextCursor)}`);
+      if (sequence !== logsSequence.current) return;
+      setItems(prev => {
+        const ids = new Set(prev.map(row => row.id));
+        const added = res.items.filter(row => {
+          if (ids.has(row.id)) return false;
+          ids.add(row.id); return true;
+        });
+        return [...prev, ...added].slice(0, MAX_VISIBLE_LOGS);
       });
-      setHasMore((res.items || []).length === 50);
+      setNextCursor(res.next_cursor);
+      setHasMore(res.has_more);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "加载更多失败");
+      if (sequence === logsSequence.current) setError(err instanceof Error ? err.message : "加载更多失败");
     } finally {
-      setLoadingMore(false);
+      if (sequence === logsSequence.current) { morePending.current = false; setLoadingMore(false); }
     }
   };
 
   useEffect(() => {
-    if (activeTab === "logs") {
-      refreshLogs();
-    } else if (activeTab === "monthly") {
-      loadMonthlyReport(selectedMonth);
-    } else if (activeTab === "analytics") {
-      loadCostAnalytics(analyticsRange);
-    }
-  }, [activeTab, refreshLogs, loadMonthlyReport, selectedMonth, loadCostAnalytics, analyticsRange]);
-
-  const resetFilters = () => {
-    setRange("24h");
-    setProviderId("");
-    setModel("");
-  };
+    if (activeTab === "logs") void refreshLogs();
+    return () => { logsSequence.current++; };
+  }, [activeTab, refreshLogs]);
+  useEffect(() => {
+    if (activeTab === "monthly") void loadMonthlyReport(selectedMonth);
+    return () => { monthlySequence.current++; };
+  }, [activeTab, loadMonthlyReport, selectedMonth]);
+  useEffect(() => {
+    if (activeTab === "analytics") void loadCostAnalytics(analyticsRange);
+    return () => { analyticsSequence.current++; };
+  }, [activeTab, loadCostAnalytics, analyticsRange]);
+  const resetFilters = () => { setDraft({ ...LOG_DEFAULTS }); applyFilters({ ...LOG_DEFAULTS }); };
 
   return (
     <div className="space-y-4 sm:space-y-6">
@@ -254,10 +316,11 @@ export default function UsagePage() {
             <div className="flex flex-col sm:flex-row sm:flex-wrap items-stretch sm:items-center gap-2.5 sm:gap-3 flex-1">
               <div className="w-full sm:w-40">
                 <Select value={range} onChange={(e) => setRange(e.target.value)}>
+                  <option value="today">今日（浏览器时区）</option>
                   <option value="24h">最近 24 小时</option>
-                  <option value="7d">最近 7 天</option>
-                  <option value="30d">最近 30 天</option>
-                  <option value="all">全部历史记录</option>
+                  <option value="7d">近 7 自然日（含今日）</option>
+                  <option value="30d">近 30 自然日（含今日）</option>
+
                 </Select>
               </div>
               <div className="w-full sm:w-48">
@@ -281,7 +344,11 @@ export default function UsagePage() {
                   onChange={(e) => setModel(e.target.value)}
                 />
               </div>
-              {(range !== "24h" || providerId || model) && (
+              {([['device', '设备 ID'], ['status', '状态 success / error / HTTP'], ['requestid', 'Request ID'], ['servicegroup', '服务分组 ID']] as const).map(([key, label]) => (
+                <Input key={key} aria-label={label} placeholder={label} value={draft[key]} onChange={e => setDraft(d => ({ ...d, [key]: e.target.value }))} />
+              ))}
+              <Button size="sm" onClick={() => applyFilters()}>应用筛选</Button>
+              {(JSON.stringify(draft) !== JSON.stringify(LOG_DEFAULTS)) && (
                 <Button variant="ghost" size="sm" onClick={resetFilters} className="self-start sm:self-auto">
                   重置筛选
                 </Button>
@@ -289,11 +356,11 @@ export default function UsagePage() {
             </div>
 
             <div className="flex items-center gap-2">
-              <Button variant="outline" size="sm" onClick={handleExportCsv} disabled={exporting}>
+              <Button variant="outline" size="sm" onClick={handleExportCsv} disabled={exporting || loading || loadedQuery !== query || !!error}>
                 <IconDownload />
                 <span>{exporting ? "导出中…" : "导出 CSV"}</span>
               </Button>
-              <Button variant="outline" size="sm" onClick={() => refreshLogs()}>
+              <Button variant="outline" size="sm" onClick={() => { logsSequence.current++; setQuery(logSnapshot(readLogFilters(location.search))); }}>
                 <IconRefresh />
                 <span>刷新记录</span>
               </Button>
@@ -306,7 +373,10 @@ export default function UsagePage() {
             </div>
           ) : null}
 
-          {loading ? (
+          <p className="text-xs text-slate-500 mb-3">仅保留的原始明细；列表、翻页与导出共用固定时间快照：{fmtTime(Number(new URLSearchParams(query).get("from")))} — {fmtTime(Number(new URLSearchParams(query).get("to")))}。月报及分析不受本页筛选影响。无自动轮询。</p>
+          {JSON.stringify(draft) !== JSON.stringify(readLogFilters(location.search)) && <p role="status">筛选修改尚未应用；当前数据与导出仍使用已应用条件。</p>}
+          {(loading || loadedQuery !== query || error) && items.length > 0 && <p role="status">旧数据（待更新 / 已过期），不代表当前筛选结果。</p>}
+          {loading && !items.length ? (
             <Spinner text="正在获取日志数据…" />
           ) : items.length ? (
             <>
@@ -420,8 +490,8 @@ export default function UsagePage() {
 
               {hasMore ? (
                 <div className="mt-6 text-center">
-                  <Button variant="secondary" onClick={loadMore} disabled={loadingMore}>
-                    {loadingMore ? "正在加载…" : "加载更多历史数据"}
+                  <Button variant="secondary" onClick={loadMore} disabled={loadingMore || loading || loadedQuery !== query || !!error || items.length >= MAX_VISIBLE_LOGS}>
+                    {items.length >= MAX_VISIBLE_LOGS ? "列表已达 1,000 条上限，请缩小筛选范围或导出（最多 20,000 条）" : loadingMore ? "正在加载…" : "加载更多历史数据"}
                   </Button>
                 </div>
               ) : (
@@ -482,7 +552,9 @@ export default function UsagePage() {
             </div>
           </Card>
 
-          {loadingReport ? (
+          <p className="text-xs text-slate-500">月报独立范围：所选月份全部服务商、模型与设备，不使用日志筛选。</p>
+          {(reportError || loadingReport || reportMonth !== selectedMonth) && <p role="status">{reportError || "月报待更新"}；已有数据为旧快照。</p>}
+          {loadingReport && !monthlyReport ? (
             <Spinner text="正在生成月度账单报表…" />
           ) : monthlyReport ? (
             <>
@@ -752,7 +824,9 @@ export default function UsagePage() {
               </Button>
             </div>
 
-            {loadingAnalytics ? (
+            <p className="text-xs text-slate-500">分析独立范围：所选时段全部服务商、模型与设备，不使用日志筛选。</p>
+            {(analyticsError || loadingAnalytics || loadedAnalyticsRange !== analyticsRange) && <p role="status">{analyticsError || "分析待更新"}；已有数据为旧快照。</p>}
+            {loadingAnalytics && !costAnalytics ? (
               <Spinner text="正在计算模型消费排行与成本结构…" />
             ) : costAnalytics?.model_ranking?.length ? (
               <div className="overflow-x-auto -mx-4 -my-4 sm:mx-0 sm:my-0">

@@ -60,15 +60,101 @@ videoTasksApp.get("/:id/diagnostics/export", async c => {
 });
 function reviewView(t: Awaited<ReturnType<typeof getVideoTask>>) {
   if (!t) return null;
-  let route: Record<string,unknown> = {}; try { route=JSON.parse(t.route_json); } catch {   }
+  let route: Record<string,unknown> = {};
+  try {
+    const parsed: unknown = JSON.parse(t.route_json);
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) route = parsed as Record<string, unknown>;
+  } catch {   }
   return {id:t.id,device_id:t.device_id,sub_token_id:t.sub_token_id,status:t.status,upstream_task_id:t.upstream_task_id,
     model:route.public_model,provider_id:route.provider_id,price_usd:t.price_usd,error_code:t.error_code,
     poll_after:t.poll_after,poll_attempts:t.poll_attempts || 0,created_at:t.created_at,updated_at:t.updated_at};
 }
-videoTasksApp.get("/",async c=>{
-  await ensureSchema(c.env); c.header("Cache-Control","no-store");
-  const rows=await c.env.DB.prepare("SELECT * FROM video_tasks WHERE status IN ('submission_unknown','pending') ORDER BY created_at,id LIMIT 100").all<NonNullable<Awaited<ReturnType<typeof getVideoTask>>>>();
-  return c.json({items:(rows.results || []).map(reviewView)});
+function taskListConditions(query: Record<string, string>, exporting: boolean) {
+  const integer = (key: string, fallback: number, max: number) => {
+    if (query[key] === undefined) return fallback;
+    if (!/^\d+$/.test(query[key]) || !Number.isSafeInteger(Number(query[key])) || Number(query[key]) > max)
+      throw new Error("invalid_video_task_filters");
+    return Number(query[key]);
+  };
+  const limit = integer("limit", exporting ? 500 : 100, exporting ? 1000 : 200);
+  if (limit < 1) throw new Error("invalid_video_task_filters");
+  const from = integer("from", 0, 8640000000000000);
+  const to = integer("to", 8640000000000000, 8640000000000000);
+  if (from > to) throw new Error("invalid_video_task_filters");
+  if ((query.from !== undefined || query.to !== undefined) &&
+      (query.from === undefined || query.to === undefined || to - from > 31 * 86400000))
+    throw new Error("invalid_video_task_filters");
+  const status = query.status || "review";
+  if (!["review", "all", "submitting", "submission_unknown", "pending", "succeeded", "failed"].includes(status))
+    throw new Error("invalid_video_task_filters");
+  const conditions = ["created_at >= ?", "created_at <= ?"];
+  const binds: (string | number)[] = [from, to];
+  if (status === "review") conditions.push("status IN ('submission_unknown','pending')");
+  else if (status !== "all") { conditions.push("status = ?"); binds.push(status); }
+  for (const [key, column] of [["device_id", "device_id"], ["task_id", "id"]] as const) {
+    const value = query[key];
+    if (!value) continue;
+    if (value.length > 256 || /[\x00-\x20\x7f]/.test(value)) throw new Error("invalid_video_task_filters");
+    conditions.push(column + " = ?"); binds.push(value);
+  }
+  const signature = JSON.stringify([status, from, to, query.device_id || "", query.task_id || ""]);
+  if (query.cursor) {
+    try {
+      if (query.cursor.length > 4096) throw new Error();
+      const cursor: unknown = JSON.parse(decodeURIComponent(query.cursor));
+      if (!Array.isArray(cursor) || cursor.length !== 3 || !Number.isSafeInteger(cursor[0]) || cursor[0] < 0 ||
+          cursor[0] > 8640000000000000 || typeof cursor[1] !== "string" || !cursor[1] || cursor[1].length > 256 ||
+          cursor[2] !== signature) throw new Error();
+      binds[0] = Math.max(from, cursor[0]);  
+      conditions.push("(created_at, id) > (?, ?)"); binds.push(cursor[0], cursor[1]);
+    } catch { throw new Error("invalid_video_task_filters"); }
+  }
+  return { limit, signature, status, taskId: query.task_id, deviceId: query.device_id, where: "WHERE " + conditions.join(" AND "), binds };
+}
+async function readTaskPage(env: Env, filters: ReturnType<typeof taskListConditions>) {
+  await ensureSchema(env);
+  let where = filters.where;
+  let binds = [...filters.binds];
+  if (filters.status === "review" && !filters.taskId && !filters.deviceId) {
+    const branch = (status: "pending" | "submission_unknown") =>
+      "SELECT id FROM (SELECT id, created_at FROM video_tasks " +
+      filters.where.replace("status IN ('submission_unknown','pending')", "status = '" + status + "'") +
+      " ORDER BY created_at ASC, id ASC LIMIT ?)";
+    where = "WHERE id IN (" + branch("pending") + " UNION ALL " + branch("submission_unknown") + ")";
+    binds = [...filters.binds, filters.limit + 1, ...filters.binds, filters.limit + 1];
+  }
+  const rows = await env.DB.prepare(
+    "SELECT id, device_id, sub_token_id, status, upstream_task_id, price_usd, error_code, poll_after, " +
+    "COALESCE(poll_attempts, 0) AS poll_attempts, created_at, updated_at, " +
+    "CASE WHEN json_valid(route_json) THEN route_json -> '$.public_model' END AS model_json, " +
+    "CASE WHEN json_valid(route_json) THEN route_json -> '$.provider_id' END AS provider_id_json " +
+    "FROM video_tasks " + where + " ORDER BY created_at ASC, id ASC LIMIT ?")
+    .bind(...binds, filters.limit + 1).all<{ id: string; created_at: number; model_json: string | null; provider_id_json: string | null }>();
+  const all = (rows.results || []).map(({ model_json, provider_id_json, ...row }) => ({
+    ...row,
+    model: model_json === null ? undefined : JSON.parse(model_json),
+    provider_id: provider_id_json === null ? undefined : JSON.parse(provider_id_json),
+  }));
+  const items = all.slice(0, filters.limit);
+  const hasMore = all.length > filters.limit;
+  const last = items.at(-1);
+  return { items, has_more: hasMore, next_cursor: hasMore && last
+    ? encodeURIComponent(JSON.stringify([last.created_at, last.id, filters.signature])) : null, limit: filters.limit };
+}
+videoTasksApp.get("/", async c => {
+  let filters: ReturnType<typeof taskListConditions>;
+  try { filters = taskListConditions(c.req.query(), false); }
+  catch { return c.json({ error: "invalid_video_task_filters" }, 400); }
+  return c.json(await readTaskPage(c.env, filters));
+});
+videoTasksApp.get("/export", async c => {
+  let filters: ReturnType<typeof taskListConditions>;
+  try { filters = taskListConditions(c.req.query(), true); }
+  catch { return c.json({ error: "invalid_video_task_filters" }, 400); }
+  const page = await readTaskPage(c.env, filters);
+  c.header("Content-Disposition", 'attachment; filename="video-tasks.json"');
+  c.header("X-Export-Truncated", String(page.has_more));
+  return c.json({ ...page, truncated: page.has_more });
 });
 videoTasksApp.get("/:id",async c=>{ c.header("Cache-Control","no-store"); const task=await getVideoTask(c.env,c.req.param("id")); return task ? c.json(reviewView(task)) : c.json({error:"video_task_not_found"},404); });
 videoTasksApp.post("/:id/reconcile",async c=>{

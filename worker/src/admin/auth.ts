@@ -59,14 +59,14 @@ authApp.post("/login", zValidator("json", LoginSchema), async (c) => {
   } catch {
   }
   const sessionSecret = c.env.SESSION_SECRET || c.env.ADMIN_SECRET || "";
-  const epoch = await getSessionEpoch(c.env).catch(() => 0);
+  const epoch = await getSessionEpoch(c.env);
   const session = await signSession(sessionSecret, epoch);
   c.header("Set-Cookie", buildSessionCookie(session));
   return c.json({ ok: true });
 });
 
-authApp.post("/logout", async (c) => {
-  await bumpSessionEpoch(c.env).catch(() => 0);
+authApp.post("/logout", adminAuth, async (c) => {
+  await bumpSessionEpoch(c.env);
   const cookies = clearSessionCookies();
   c.header("Set-Cookie", cookies[0]);
   for (const cookie of cookies.slice(1)) c.header("Set-Cookie", cookie, { append: true });

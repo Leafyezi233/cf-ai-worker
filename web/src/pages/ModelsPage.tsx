@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 import { api, ApiError } from "../api/client";
+import { useAdminFilters } from "../hooks/useAdminFilters";
+import { AdminListToolbar } from "../components/AdminListToolbar";
 import { VideoPricingModeNotice, videoPricingModeNotice } from "../components/VideoPricingModeNotice";
 import { ModelCatalogVisibility, ModelCatalogVisibilityBadge, setCatalogVisible } from "../components/ModelCatalogVisibility";
 import { useModelCategories, ModelCategoryManager, ModelCategoryAssignment, ModelCategoryBadges, ModelCategoryFilter, categoryModelName, matchesModelCategory, CATEGORY_RENAME_HELP } from "../components/ModelCategories";
@@ -7,7 +9,7 @@ import { ProtocolProbePanel } from "../components/ProtocolProbePanel";
 import { CONNECTION_PROTOCOLS, isProtocolObject, readProtocolConfig, providerConnectionState, updateModelProtocolValue, validateModelProtocolDeclarations } from "../components/ProtocolConnectionsControls";
 import type { ModelItem, Provider } from "../types";
 import { Badge, Button, Card, Empty, Input, Modal, Select, Spinner, Textarea, CopyButton } from "../components/ui";
-import { IconPlus, IconEdit, IconTrash, IconModels, IconSearch, IconRefresh, IconCheck, IconTerminal, IconDownload, IconZap } from "../components/icons";
+import { IconPlus, IconEdit, IconTrash, IconModels, IconRefresh, IconCheck, IconTerminal, IconDownload, IconZap } from "../components/icons";
 import { useToast } from "../components/Toast";
 import { useQuery, invalidateCache } from "../hooks/useQuery";
 import { buildDshProfile, buildPiModelsConfig, DSH_PROFILE_HELP, type ModelConfigMetadata } from "../utils/modelConfigExport";
@@ -233,19 +235,17 @@ function VideoSettingsControls({configJson,onChange,onError}:VideoControlsProps,
 export default function ModelsPage() {
   const toast = useToast();
   const fetchModelsData = useCallback(async (): Promise<ModelsPageData> => {
-    const [mRes, pRes] = await Promise.allSettled([
+    const [m, p] = await Promise.all([
       api.get<{ items: ModelItem[] }>("/api/models"),
       api.get<{ items: Provider[] }>("/api/providers"),
     ]);
-    const m = mRes.status === "fulfilled" ? mRes.value : { items: [] };
-    const p = pRes.status === "fulfilled" ? pRes.value : { items: [] };
     return {
       items: m.items || [],
       providers: p.items || [],
     };
   }, []);
 
-  const { data, loading, error: queryError, refresh } = useQuery("models-page-data", fetchModelsData);
+  const { data, loading, isRefreshing, error: queryError, updatedAt, refresh } = useQuery("models-page-data", fetchModelsData, { revalidateIfFresh: false });
   const items = useMemo(() => data?.items || [], [data?.items]);
   const parsedConfigs = useMemo(() => new Map(items.map((m) => {
     let config: Record<string, any> = {};
@@ -263,9 +263,10 @@ export default function ModelsPage() {
 
   const [show, setShow] = useState(false);
   const [error, setError] = useState("");
-  const [search, setSearch] = useState("");
-  const [filterProviderId, setFilterProviderId] = useState("");
-  const [filterCapability, setFilterCapability] = useState("");
+  const [filters, setFilter, resetFilters] = useAdminFilters({ q: "", provider: "", capability: "", category: "", enabled: "", pricing: "", type: "", sort: "" });
+  const search = filters.q;
+  const filterProviderId = filters.provider;
+  const filterCapability = filters.capability;
   const [submitting, setSubmitting] = useState(false);
   const [form, setForm] = useState<FormState>({
     provider_id: "",
@@ -507,6 +508,7 @@ export default function ModelsPage() {
       });
       setShowSync(false);
       invalidateCache("dashboard-");
+      invalidateCache("model-groups");
       await refresh();
     } catch (err) {
       setSyncError(err instanceof ApiError ? err.message : "批量导入失败");
@@ -546,6 +548,7 @@ export default function ModelsPage() {
       }
       setShow(false);
       invalidateCache("dashboard-");
+      invalidateCache("model-groups");
       await refresh();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "保存失败");
@@ -564,6 +567,7 @@ export default function ModelsPage() {
         return next;
       });
       invalidateCache("dashboard-");
+      invalidateCache("model-groups");
       await refresh();
       toast.success(`模型「${m.model_name}」已删除`);
     } catch (err) {
@@ -575,6 +579,7 @@ export default function ModelsPage() {
     try {
       await api.put(`/api/models/${m.id}`, { enabled: !m.enabled });
       invalidateCache("dashboard-");
+      invalidateCache("model-groups");
       await refresh();
       toast.success(`模型「${m.model_name}」已${m.enabled ? "禁用" : "启用"}`);
     } catch (err) {
@@ -591,6 +596,7 @@ export default function ModelsPage() {
         cache_ttl: m.cache_ttl || 3600,
       });
       invalidateCache("dashboard-");
+      invalidateCache("model-groups");
       await refresh();
       toast.success(`模型「${m.model_name}」缓存已${m.cache_enabled ? "关闭" : "开启"}`);
     } catch (err) {
@@ -599,7 +605,7 @@ export default function ModelsPage() {
   }
 
   async function handleBatchEnable(enabled: boolean) {
-    if (!selectedIds.size) return;
+    if (!selectedIds.size || hiddenSelectionCount > 0) return;
     setBatchOperating(true);
     try {
       await api.post("/api/models/batch-update", {
@@ -609,6 +615,7 @@ export default function ModelsPage() {
       const count = selectedIds.size;
       setSelectedIds(new Set());
       invalidateCache("dashboard-");
+      invalidateCache("model-groups");
       await refresh();
       toast.success(`已批量${enabled ? "启用" : "禁用"} ${count} 个模型`);
     } catch (err) {
@@ -619,7 +626,7 @@ export default function ModelsPage() {
   }
 
   async function handleBatchCache(enabled: boolean) {
-    if (!selectedIds.size) return;
+    if (!selectedIds.size || hiddenSelectionCount > 0) return;
     if (enabled && items.some(m => selectedIds.has(m.id) && resolvedModelType(m.config_json, m.billing_unit) === "video")) { toast.error("选中的视频模型不支持响应缓存，请取消选择后重试"); return; }
     if (enabled && items.some(m => selectedIds.has(m.id) && resolvedModelType(m.config_json, m.billing_unit) === "embedding")) { toast.error("选中的向量模型不支持响应缓存，请取消选择后重试"); return; }
     setBatchOperating(true);
@@ -632,6 +639,7 @@ export default function ModelsPage() {
       const count = selectedIds.size;
       setSelectedIds(new Set());
       invalidateCache("dashboard-");
+      invalidateCache("model-groups");
       await refresh();
       toast.success(`已批量${enabled ? "开启" : "关闭"} ${count} 个模型的缓存`);
     } catch (err) {
@@ -642,7 +650,7 @@ export default function ModelsPage() {
   }
 
   async function handleBatchPricing(mode: "free" | "priced") {
-    if (!selectedIds.size) return;
+    if (!selectedIds.size || hiddenSelectionCount > 0) return;
     setBatchOperating(true);
     try {
       await api.post("/api/models/batch-update", {
@@ -652,6 +660,7 @@ export default function ModelsPage() {
       const count = selectedIds.size;
       setSelectedIds(new Set());
       invalidateCache("dashboard-");
+      invalidateCache("model-groups");
       await refresh();
       toast.success(`已把 ${count} 个模型设为${mode === "free" ? "免费" : "按价计费"}`);
     } catch (err) {
@@ -662,7 +671,7 @@ export default function ModelsPage() {
   }
 
   async function handleBatchDelete() {
-    if (!selectedIds.size) return;
+    if (!selectedIds.size || hiddenSelectionCount > 0) return;
     if (!confirm(`确定要永久删除选中的 ${selectedIds.size} 个模型吗？此操作无法撤销。`)) return;
     setBatchOperating(true);
     try {
@@ -672,6 +681,7 @@ export default function ModelsPage() {
       });
       setSelectedIds(new Set());
       invalidateCache("dashboard-");
+      invalidateCache("model-groups");
       await refresh();
       toast.success(`已成功删除选中的 ${count} 个模型`);
     } catch (err) {
@@ -689,11 +699,19 @@ export default function ModelsPage() {
   const [catalogError, setCatalogError] = useState("");
   const [catalogLoading, setCatalogLoading] = useState(false);
   const categories = useModelCategories();
-  const [categoryFilter, setCategoryFilter] = useState("");
+  const categoryFilter = filters.category;
 
-  const filteredItems = items.filter((m) => {
+  const filteredItems = useMemo(() => {
+    const result = items.filter((m) => {
     if (!matchesModelCategory(categories.data, categoryModelName(m), categoryFilter)) return false;
     if (filterProviderId && m.provider_id !== filterProviderId) return false;
+    if ((filters.enabled === "1" && !m.enabled) || (filters.enabled === "0" && m.enabled)) return false;
+    if (filters.pricing && (m.pricing_mode || "unset") !== filters.pricing) return false;
+    if (filters.type) {
+      const type = parsedConfigs.get(m)?.model_type;
+      const resolved = type === "video" || type === "embedding" || type === "image" || type === "text" ? type : m.billing_unit === "call" ? "image" : "text";
+      if (resolved !== filters.type) return false;
+    }
     if (filterCapability) {
       const customObj = parsedConfigs.get(m)!;
       const caps = Array.isArray(customObj.capabilities) && customObj.capabilities.length
@@ -702,13 +720,20 @@ export default function ModelsPage() {
       if (!caps.includes(filterCapability)) return false;
     }
     if (!search.trim()) return true;
-    const q = search.toLowerCase();
+    const q = search.trim().toLowerCase();
     return (
       m.model_name.toLowerCase().includes(q) ||
       (m.display_name && m.display_name.toLowerCase().includes(q)) ||
       (m.alias && m.alias.toLowerCase().includes(q))
     );
   });
+  if (filters.sort === "name" || filters.sort === "name-desc") {
+    result.sort((a, b) => (a.model_name.localeCompare(b.model_name) || a.id.localeCompare(b.id)) * (filters.sort === "name-desc" ? -1 : 1));
+  }
+  return result;
+  }, [items, categories.data, categoryFilter, filterProviderId, filterCapability, search, filters, parsedConfigs]);
+  const visibleIds = new Set(filteredItems.map(m => m.id));
+  const hiddenSelectionCount = [...selectedIds].filter(id => !visibleIds.has(id)).length;
 
   const filteredSyncModels = fetchedModels.filter((m) =>
     m.toLowerCase().includes(syncFilter.toLowerCase())
@@ -873,7 +898,7 @@ wire_specification = "openai"
 
       <ModelCategoryManager state={categories} />
 
-      <ProtocolProbePanel modelIds={Array.from(selectedIds)} providerId={filterProviderId} onApplied={refresh} />
+      <ProtocolProbePanel modelIds={Array.from(selectedIds).filter(id => visibleIds.has(id))} providerId={filterProviderId} onApplied={refresh} />
 
       { }
       <div className="rounded-xl border border-blue-100 dark:border-blue-900/50 bg-gradient-to-r from-blue-50/60 via-indigo-50/40 to-purple-50/50 dark:from-blue-950/30 dark:via-indigo-950/20 dark:to-purple-950/30 px-3.5 py-2.5 transition-all shadow-xs">
@@ -944,45 +969,33 @@ wire_specification = "openai"
       ) : null}
 
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div className="flex flex-col sm:flex-row sm:items-center gap-2.5 sm:gap-3 w-full sm:w-auto">
-          <div className="relative w-full sm:w-64">
-            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400 dark:text-slate-500">
-              <IconSearch />
-            </div>
-            <Input
-              className="pl-9"
-              placeholder="搜索模型 / 别名…"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
-          </div>
+        <AdminListToolbar filters={filters} onChange={setFilter} onReset={resetFilters} total={items.length} count={filteredItems.length} loading={loading || isRefreshing} error={queryError ? "读取失败：" + queryError.message + "；如有旧数据仍予保留" : null} onRefresh={() => { void refresh().catch(() => {}); }} searchPlaceholder="搜索模型 / 别名…">
+          <ModelCategoryFilter state={categories} value={categoryFilter} onChange={value => setFilter("category", value)} />
+          <Select aria-label="Provider筛选" className="!w-auto" value={filterProviderId} onChange={e => setFilter("provider", e.target.value)}>
+            <option value="">全部 Provider ({providers.length})</option>
+            {providers.map(p => <option key={p.id} value={p.id}>{p.name} ({p.type})</option>)}
+          </Select>
+          <Select aria-label="计价模式" className="!w-auto" value={filters.pricing} onChange={e => setFilter("pricing", e.target.value)}>
+            <option value="">全部计价模式</option><option value="free">免费</option><option value="priced">按价计费</option><option value="unset">未定价</option>
+          </Select>
+          <Select aria-label="模型类型" className="!w-auto" value={filters.type} onChange={e => setFilter("type", e.target.value)}>
+            <option value="">全部模型类型</option><option value="text">文本</option><option value="image">图片</option><option value="embedding">向量</option><option value="video">视频</option>
+          </Select>
+        </AdminListToolbar>
+        {updatedAt && <p className="mt-2 text-xs text-slate-500">上次成功更新：{new Date(updatedAt).toLocaleTimeString()}</p>}
 
-          <ModelCategoryFilter state={categories} value={categoryFilter} onChange={setCategoryFilter} />
-          <div className="w-full sm:w-52">
-            <Select
-              value={filterProviderId}
-              onChange={(e) => setFilterProviderId(e.target.value)}
-            >
-              <option value="">全部 Provider ({providers.length})</option>
-              {providers.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name} ({p.type})
-                </option>
-              ))}
-            </Select>
-          </div>
-        </div>
 
         { }
         {selectedIds.size > 0 ? (
           <div className="flex flex-wrap items-center gap-2 bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-800 px-3 py-1.5 rounded-xl text-xs animate-in fade-in slide-in-from-top-1 duration-200 w-full sm:w-auto">
-            <span className="font-semibold text-blue-900 dark:text-blue-300">已选 {selectedIds.size} 项</span>
-            <ModelCategoryAssignment state={categories} modelNames={items.filter(m => selectedIds.has(m.id)).map(categoryModelName)} label="批量分类" disabled={batchOperating} />
+            <span className="font-semibold text-blue-900 dark:text-blue-300">已选 {selectedIds.size} 项（隐藏 {hiddenSelectionCount} 项）</span>
+            {hiddenSelectionCount > 0 ? <><span role="alert">存在隐藏选项，清理后才能批量操作。</span><Button type="button" size="sm" variant="outline" onClick={() => setSelectedIds(new Set([...selectedIds].filter(id => visibleIds.has(id))))}>清理隐藏选择</Button></> : null}
+            <ModelCategoryAssignment state={categories} modelNames={items.filter(m => selectedIds.has(m.id)).map(categoryModelName)} label="批量分类" disabled={batchOperating || hiddenSelectionCount > 0} />
             <div className="h-4 w-px bg-blue-200 dark:bg-blue-800 mx-1 hidden sm:block" />
             <Button
               size="sm"
               variant="outline"
-              disabled={batchOperating}
+              disabled={batchOperating || hiddenSelectionCount > 0}
               onClick={() => handleBatchEnable(true)}
               className="bg-white dark:bg-slate-800 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 border-emerald-300 dark:border-emerald-700 shadow-none"
             >
@@ -992,7 +1005,7 @@ wire_specification = "openai"
             <Button
               size="sm"
               variant="outline"
-              disabled={batchOperating}
+              disabled={batchOperating || hiddenSelectionCount > 0}
               onClick={() => handleBatchEnable(false)}
               className="bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 shadow-none"
             >
@@ -1001,7 +1014,7 @@ wire_specification = "openai"
             <Button
               size="sm"
               variant="outline"
-              disabled={batchOperating}
+              disabled={batchOperating || hiddenSelectionCount > 0}
               onClick={() => handleBatchCache(true)}
               className="bg-white dark:bg-slate-800 text-purple-700 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-950/40 border-purple-300 dark:border-purple-700 shadow-none"
             >
@@ -1011,7 +1024,7 @@ wire_specification = "openai"
             <Button
               size="sm"
               variant="outline"
-              disabled={batchOperating}
+              disabled={batchOperating || hiddenSelectionCount > 0}
               onClick={() => handleBatchCache(false)}
               className="bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 shadow-none"
             >
@@ -1020,7 +1033,7 @@ wire_specification = "openai"
             <Button
               size="sm"
               variant="outline"
-              disabled={batchOperating}
+              disabled={batchOperating || hiddenSelectionCount > 0}
               onClick={() => handleBatchPricing("free")}
               className="bg-white dark:bg-slate-800 text-sky-700 dark:text-sky-400 hover:bg-sky-50 dark:hover:bg-sky-950/40 border-sky-300 dark:border-sky-700 shadow-none"
             >
@@ -1029,7 +1042,7 @@ wire_specification = "openai"
             <Button
               size="sm"
               variant="outline"
-              disabled={batchOperating}
+              disabled={batchOperating || hiddenSelectionCount > 0}
               onClick={() => handleBatchPricing("priced")}
               className="bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 shadow-none"
             >
@@ -1038,7 +1051,7 @@ wire_specification = "openai"
             <Button
               size="sm"
               variant="outline"
-              disabled={batchOperating}
+              disabled={batchOperating || hiddenSelectionCount > 0}
               onClick={handleBatchDelete}
               className="bg-white dark:bg-slate-800 text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 hover:text-rose-700 dark:hover:text-rose-300 border-rose-200 dark:border-rose-800 shadow-none"
             >
@@ -1070,7 +1083,7 @@ wire_specification = "openai"
           <button
             key={tag.key}
             type="button"
-            onClick={() => setFilterCapability(tag.key)}
+            onClick={() => setFilter("capability", tag.key)}
             className={`px-2.5 py-1 rounded-lg text-xs font-semibold shrink-0 transition-all cursor-pointer ${
               filterCapability === tag.key
                 ? "bg-slate-900 text-white dark:bg-blue-600 dark:text-white shadow-xs"
@@ -1510,7 +1523,7 @@ wire_specification = "openai"
             </Select>
             <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
               {resolvedModelType(form.config_json, form.billing_unit) === "video"
-                ? isDoubaoVideoDraft(form.config_json) ? "Doubao 采用独立分组报价：¥/次按成功任务、¥/秒按生成秒数结算；不继承其它协议的价格或能力。" : isSecureVideoDraft(form.config_json) ? "标准视频使用管理员按分辨率与参考视频设置的 ¥/秒报价；未知、等待和失败任务不结算。旧按次报价兼容数据须在下方明确转换。" : "视频按成功任务次数计费，不按秒；未知、等待和失败任务不收费。"
+                ? isDoubaoVideoDraft(form.config_json) ? "Doubao 采用独立分组报价：¥/次按成功任务、¥/秒按生成秒数结算；不继承 Minimax 价格或能力。" : isSecureVideoDraft(form.config_json) ? "标准视频使用管理员按分辨率与参考视频设置的 ¥/秒报价；未知、等待和失败任务不结算。旧按次报价兼容数据须在下方明确转换。" : "视频按成功任务次数计费，不按秒；未知、等待和失败任务不收费。"
                 : resolvedModelType(form.config_json, form.billing_unit) === "embedding"
                 ? "向量仅按输入 Token 收费，不收输出费用。"
                 : form.billing_unit === "call"

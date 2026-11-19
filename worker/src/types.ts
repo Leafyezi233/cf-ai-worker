@@ -35,6 +35,7 @@ export interface Env {
   VIDEO_REFERENCE_IMAGES?: Fetcher;
   VIDEO_REFERENCE_IMAGE_ORIGIN?: string;
   RATE_LIMITER?: DurableObjectNamespace;
+  ADMIN_PATH_PREFIX?: string;
   ADMIN_SECRET?: string;
   SESSION_SECRET?: string;
   ENCRYPTION_KEY?: string;

@@ -54,10 +54,12 @@ describe("separate durable video usage evidence",()=>{
   });
   it("adds exactly one stage to the existing ten-stage DB without rewriting prior claims; old version rejects",async()=>{
     const d=createRealD1({init:[],alters:[]});try{
-      const old={...SCHEMA_DEFINITION,extensions:SCHEMA_DEFINITION.extensions.slice(0,-1)};
+      const videoEra={...SCHEMA_DEFINITION,extensions:SCHEMA_DEFINITION.extensions.filter(e=>!e.id.startsWith("admin-record/"))};
+      const old={...videoEra,extensions:videoEra.extensions.filter(e=>e.id!=="video/0001-upstream-usage")};
       await migrateVersionedSchema(d.DB,old);
       const before=d.rows("SELECT * FROM cpg_schema_versions ORDER BY id");expect(before).toHaveLength(10);
-      await ensureSchema({DB:d.DB} as Env);
+      await migrateVersionedSchema(d.DB,videoEra);
+      expect(d.rows("SELECT id FROM cpg_schema_versions")).toHaveLength(11);
       expect(d.rows("SELECT * FROM cpg_schema_versions WHERE id <> 'video/0001-upstream-usage' ORDER BY id")).toEqual(before);
       expect(d.rows("PRAGMA table_info(video_tasks)").some(x=>x.name==="upstream_usage_json")).toBe(true);
       await expect(migrateVersionedSchema(d.DB,old)).rejects.toThrow(/Unknown core schema version/);

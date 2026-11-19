@@ -1,3 +1,5 @@
+import { adminApiPath } from "./adminPath";
+
 export class ApiError extends Error {
   status: number;
   constructor(message: string, status: number) {
@@ -13,16 +15,17 @@ export function setUnauthorizedHandler(handler: UnauthorizedHandler | null) {
   unauthorizedHandler = handler;
 }
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
+export async function adminFetch(path: string, init?: RequestInit): Promise<Response> {
   const tzOffset = String(new Date().getTimezoneOffset());
-  const res = await fetch(path, {
+  const res = await fetch(adminApiPath(path), {
+    ...init,
     credentials: "include",
     headers: {
       "X-Timezone-Offset": tzOffset,
+      "X-Admin-Request": "1",
       ...(init?.body ? { "Content-Type": "application/json" } : {}),
       ...(init?.headers || {}),
     },
-    ...init,
   });
   if (!res.ok) {
     if (res.status === 401 && !path.startsWith("/api/auth/login") && !path.startsWith("/api/auth/me")) {
@@ -35,8 +38,18 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     }
     throw new ApiError(data?.error || data?.message || `HTTP ${res.status}`, res.status);
   }
+  return res;
+}
+
+async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const res = await adminFetch(path, init);
   if (res.status === 204) return undefined as T;
   return res.json() as Promise<T>;
+}
+
+export interface DownloadMetadata {
+  truncated: boolean;
+  limit: number | null;
 }
 
 export const api = {
@@ -46,8 +59,8 @@ export const api = {
   put: <T>(path: string, body?: unknown) =>
     request<T>(path, { method: "PUT", body: body === undefined ? undefined : JSON.stringify(body) }),
   del: <T>(path: string) => request<T>(path, { method: "DELETE" }),
-  download: async (path: string, defaultFilename = "export.csv") => {
-    const res = await fetch(path, { credentials: "include" });
+  download: async (path: string, defaultFilename = "export.csv"): Promise<DownloadMetadata> => {
+    const res = await adminFetch(path);
     if (!res.ok) {
       let data: { error?: string; message?: string } | null = null;
       try {
@@ -71,6 +84,11 @@ export const api = {
     a.click();
     a.remove();
     window.URL.revokeObjectURL(url);
+    const limit = Number(res.headers.get("X-Export-Limit"));
+    return {
+      truncated: res.headers.get("X-Export-Truncated") === "true",
+      limit: Number.isSafeInteger(limit) && limit > 0 ? limit : null,
+    };
   },
 };
 

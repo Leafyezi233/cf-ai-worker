@@ -142,7 +142,8 @@ describe("atomic monthly operation results on real SQLite",()=>{
   });
   it("appends one stage without changing the durable predecessors, and warm readiness adds no queries",async()=>{
     const manifest=d.rows<{id:string;checksum:string}>("SELECT id,checksum FROM cpg_schema_versions ORDER BY id");
-    expect(manifest.slice(0,6).map(r=>r.id)).toEqual(["core/0001-tables","core/0002-columns","core/0003-ready","monthly/0001-tables","monthly/0002-funding","monthly/0003-operations"]);
+    const predecessors=["core/0001-tables","core/0002-columns","core/0003-ready","monthly/0001-tables","monthly/0002-funding","monthly/0003-operations"];
+    expect(manifest.filter(r=>predecessors.includes(r.id)).map(r=>r.id)).toEqual(predecessors);
     const prepare=vi.spyOn(env.DB,"prepare");await ensureSchema(env);expect(prepare).not.toHaveBeenCalled();prepare.mockRestore();
     await migrateSchema(env);expect(d.rows("SELECT id,checksum FROM cpg_schema_versions ORDER BY id")).toEqual(manifest);
     resetSchemaCache(env.DB);await ensureSchema(env);expect(d.rows("SELECT id,checksum FROM cpg_schema_versions ORDER BY id")).toEqual(manifest);

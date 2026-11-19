@@ -336,18 +336,31 @@ export function watchForStall(
     } catch {
     }
   };
-  const arm = (ms: number) => {
-    if (stopped) return;
-    if (timer !== undefined) clearTimeout(timer);
-    timer = setTimeout(() => {
-      if (stopped) return;
-      stopped = true;
+  let deadline = 0;
+  let timerDeadline = 0;
+  const schedule = (ms: number) => {
+    timerDeadline = deadline;
+    timer = setTimeout(function onWatchdogTimeout() {
       timer = undefined;
+      if (stopped) return;
+      const remaining = deadline - performance.now();
+      if (remaining > 0) {
+        schedule(remaining);
+        return;
+      }
+      stopped = true;
       onStall();
       controller.abort();
       void reader.cancel().catch(() => {});
       closeQuietly();
     }, ms);
+  };
+  const arm = (ms: number) => {
+    if (stopped) return;
+    deadline = performance.now() + ms;
+    if (timer !== undefined && deadline >= timerDeadline) return;
+    if (timer !== undefined) clearTimeout(timer);
+    schedule(ms);
   };
   const monitored = new ReadableStream<Uint8Array>({
     start(ctrl) {

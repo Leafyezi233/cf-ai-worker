@@ -16,7 +16,7 @@ const OTHER_ID = "monthly-other-device";
 const OTHER_TOKEN = "monthly-other-master-secret";
 const SUB_TOKEN = "monthly-sub-token-secret";
 const DAY = 24 * 60 * 60 * 1000;
-const BASE = "/api/monthly-passes";
+const BASE = "/admin-prefix-example/api/monthly-passes";
 type PlanInput = {
   name: string; enabled: 0 | 1;
   limits: { daily_usd: number | null; weekly_usd: number | null; five_hour_usd: number | null; total_usd: number | null };
@@ -40,7 +40,8 @@ function input(patch: Partial<PlanInput> = {}): PlanInput {
 }
 function request(path: string, method = "GET", body?: unknown, headers: Record<string, string> = {}) {
   return app.request("https://monthly.test" + path, {
-    method, headers: { accept: "application/json", "content-type": "application/json", "cf-connecting-ip": "192.0.2.44", ...headers },
+    method, headers: { accept: "application/json", "content-type": "application/json", "cf-connecting-ip": "192.0.2.44",
+      ...(path.startsWith(BASE) && !["GET", "HEAD", "OPTIONS"].includes(method) ? { "X-Admin-Request": "1" } : {}), ...headers },
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
   }, env);
 }
@@ -160,10 +161,10 @@ describe("monthly plans strict input and envelopes", () => {
     expect(d.rows("SELECT * FROM device_service_groups")).toEqual([]);
   });
   it("rejects malformed JSON and non-finite JSON numbers before persistence", async () => {
-    const malformed = await app.request("https://monthly.test" + BASE + "/plans", { method: "POST", headers: { cookie: adminCookie, "content-type": "application/json" }, body: "{" }, env);
+    const malformed = await app.request("https://monthly.test" + BASE + "/plans", { method: "POST", headers: { cookie: adminCookie, "content-type": "application/json", "X-Admin-Request": "1" }, body: "{" }, env);
     expect(malformed.status).toBe(400); expect(await malformed.json()).toMatchObject({ error: "invalid_json" });
     const raw = JSON.stringify(input()).replace('"daily_usd":2', '"daily_usd":1e999');
-    const infinite = await app.request("https://monthly.test" + BASE + "/plans", { method: "POST", headers: { cookie: adminCookie, "content-type": "application/json" }, body: raw }, env);
+    const infinite = await app.request("https://monthly.test" + BASE + "/plans", { method: "POST", headers: { cookie: adminCookie, "content-type": "application/json", "X-Admin-Request": "1" }, body: raw }, env);
     expect(infinite.status).toBe(400); expect(auditRows()).toEqual([]);
   });
 });

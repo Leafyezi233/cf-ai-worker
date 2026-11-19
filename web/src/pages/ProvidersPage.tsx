@@ -1,4 +1,4 @@
-import { useCallback, useState, type FormEvent } from "react";
+import { useCallback, useMemo, useState, type FormEvent } from "react";
 import { api, ApiError } from "../api/client";
 import type { Provider } from "../types";
 import { ProtocolConnectionsControls, validateProviderProtocolConnections } from "../components/ProtocolConnectionsControls";
@@ -6,6 +6,8 @@ import { Badge, Button, Card, Empty, Input, Modal, Select, Spinner, Textarea } f
 import { IconPlus, IconEdit, IconTrash, IconProviders, IconCheck, IconSearch, IconUpload, IconZap, IconActivity } from "../components/icons";
 import { useToast } from "../components/Toast";
 import { useQuery, invalidateCache } from "../hooks/useQuery";
+import { useAdminFilters } from "../hooks/useAdminFilters";
+import { AdminListToolbar } from "../components/AdminListToolbar";
 
 interface FormState {
   id?: string;
@@ -54,7 +56,7 @@ export default function ProvidersPage() {
     return res.items || [];
   }, []);
 
-  const { data: items = [], loading, refresh } = useQuery("providers-list", fetchProviders);
+  const { data: items = [], loading, isRefreshing, error: queryError, updatedAt, refresh } = useQuery("providers-list", fetchProviders, { revalidateIfFresh: false });
   const [form, setForm] = useState<FormState>(emptyForm);
   const [show, setShow] = useState(false);
   const [showKeyText, setShowKeyText] = useState(false);
@@ -65,8 +67,8 @@ export default function ProvidersPage() {
   const [pingingAll, setPingingAll] = useState(false);
   const [pingingId, setPingingId] = useState<string | null>(null);
 
-  const [search, setSearch] = useState("");
-  const [filterType, setFilterType] = useState("");
+  const [filters, setFilter, resetFilters] = useAdminFilters({ q: "", enabled: "", sort: "", type: "" });
+  function changeFilter(key: string, value: string) { setSelectedIds(new Set()); setFilter(key, value); }
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [batchOperating, setBatchOperating] = useState(false);
@@ -169,6 +171,7 @@ export default function ProvidersPage() {
 
       invalidateCache("providers-list");
       invalidateCache("models-");
+      invalidateCache("model-groups");
       invalidateCache("dashboard-");
       await refresh();
     } catch (err) {
@@ -219,6 +222,7 @@ export default function ProvidersPage() {
       }
       setShow(false);
       invalidateCache("models-");
+      invalidateCache("model-groups");
       invalidateCache("dashboard-");
       await refresh();
     } catch (err) {
@@ -238,6 +242,7 @@ export default function ProvidersPage() {
         return next;
       });
       invalidateCache("models-");
+      invalidateCache("model-groups");
       invalidateCache("dashboard-");
       await refresh();
       toast.success(`Provider「${p.name}」已删除`);
@@ -250,6 +255,7 @@ export default function ProvidersPage() {
     try {
       await api.put(`/api/providers/${p.id}`, { enabled: !p.enabled });
       invalidateCache("models-");
+      invalidateCache("model-groups");
       invalidateCache("dashboard-");
       await refresh();
       toast.success(`Provider「${p.name}」已${p.enabled ? "禁用" : "启用"}`);
@@ -259,7 +265,8 @@ export default function ProvidersPage() {
   }
 
   async function handleBatchEnable(enabled: boolean) {
-    if (!selectedIds.size) return;
+    if (!selectedIds.size || hiddenSelected > 0) return;
+    if (!confirm(`确定对以下 ${selectedIds.size} 个 Provider ${enabled ? "启用" : "停用"}？\n${filteredItems.filter(p => selectedIds.has(p.id)).map(p => p.name).join("、")}`)) return;
     setBatchOperating(true);
     try {
       await api.post("/api/providers/batch-update", {
@@ -269,6 +276,7 @@ export default function ProvidersPage() {
       const count = selectedIds.size;
       setSelectedIds(new Set());
       invalidateCache("models-");
+      invalidateCache("model-groups");
       invalidateCache("dashboard-");
       await refresh();
       toast.success(`已批量${enabled ? "启用" : "禁用"} ${count} 个 Provider`);
@@ -280,8 +288,8 @@ export default function ProvidersPage() {
   }
 
   async function handleBatchDelete() {
-    if (!selectedIds.size) return;
-    if (!confirm(`确定要永久删除选中的 ${selectedIds.size} 个 Provider 吗？关联的模型可能无法正常调用。`)) return;
+    if (!selectedIds.size || hiddenSelected > 0) return;
+    if (!confirm(`确定要永久删除选中的 ${selectedIds.size} 个 Provider 吗？关联的模型可能无法正常调用。\n${filteredItems.filter(p => selectedIds.has(p.id)).map(p => p.name).join("、")}`)) return;
     setBatchOperating(true);
     try {
       const res = await api.post<{ deleted: number; skipped: number }>("/api/providers/batch-delete", {
@@ -289,6 +297,7 @@ export default function ProvidersPage() {
       });
       setSelectedIds(new Set());
       invalidateCache("models-");
+      invalidateCache("model-groups");
       invalidateCache("dashboard-");
       await refresh();
       if (res.skipped > 0) {
@@ -335,17 +344,15 @@ export default function ProvidersPage() {
     }
   }
 
-  const filteredItems = items.filter((p) => {
-    if (filterType && p.type !== filterType) return false;
-    if (!search.trim()) return true;
-    const q = search.toLowerCase();
-    return (
-      p.name.toLowerCase().includes(q) ||
-      (p.endpoint && p.endpoint.toLowerCase().includes(q)) ||
-      (p.secret_name && p.secret_name.toLowerCase().includes(q)) ||
-      p.type.toLowerCase().includes(q)
-    );
-  });
+  const filteredItems = useMemo(() => {
+    const q = filters.q.trim().toLowerCase();
+    const result = items.filter(p => (!filters.type || p.type === filters.type) &&
+      (!filters.enabled || Boolean(p.enabled) === (filters.enabled === "1")) &&
+      (!q || [p.id, p.name, p.type, p.endpoint].some(value => value?.toLowerCase().includes(q))));
+    if (filters.sort) result.sort((a, b) => (a.name.localeCompare(b.name) || a.id.localeCompare(b.id)) * (filters.sort === "name-desc" ? -1 : 1));
+    return result;
+  }, [items, filters]);
+  const hiddenSelected = selectedIds.size - filteredItems.filter(p => selectedIds.has(p.id)).length;
 
   const isAllSelected = filteredItems.length > 0 && filteredItems.every((p) => selectedIds.has(p.id));
 
@@ -402,31 +409,9 @@ export default function ProvidersPage() {
       </div>
 
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div className="flex flex-col sm:flex-row sm:items-center gap-2.5 sm:gap-3 w-full sm:w-auto">
-          <div className="relative w-full sm:w-64">
-            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400 dark:text-slate-500">
-              <IconSearch />
-            </div>
-            <Input
-              className="pl-9"
-              placeholder="搜索 Provider / Endpoint…"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
-          </div>
-
-          <div className="w-full sm:w-44">
-            <Select
-              value={filterType}
-              onChange={(e) => setFilterType(e.target.value)}
-            >
-              <option value="">全部旧默认类型 ({items.length})</option>
-              <option value="openai">OpenAI 兼容</option>
-              <option value="anthropic">Anthropic</option>
-              <option value="gemini">Google Gemini</option>
-            </Select>
-          </div>
-        </div>
+        <AdminListToolbar filters={filters} onChange={changeFilter} onReset={() => { setSelectedIds(new Set()); resetFilters(); }} total={items.length} count={filteredItems.length} loading={loading || isRefreshing} error={queryError ? "读取失败：" + queryError.message + "；如有旧数据仍予保留" : null} onRefresh={() => void refresh().catch(() => {})} searchPlaceholder="搜索供应商名称 / ID / Endpoint">
+          <Select aria-label="供应商默认协议筛选" value={filters.type} onChange={e => changeFilter("type", e.target.value)}><option value="">全部旧默认协议</option><option value="openai">OpenAI 兼容</option><option value="anthropic">Anthropic</option><option value="gemini">Gemini</option></Select>
+        </AdminListToolbar>
 
         { }
         {selectedIds.size > 0 ? (
@@ -436,7 +421,7 @@ export default function ProvidersPage() {
             <Button
               size="sm"
               variant="outline"
-              disabled={batchOperating}
+              disabled={batchOperating || hiddenSelected > 0}
               onClick={() => handleBatchEnable(true)}
               className="bg-white dark:bg-slate-800 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 border-emerald-300 dark:border-emerald-700 shadow-none"
             >
@@ -446,7 +431,7 @@ export default function ProvidersPage() {
             <Button
               size="sm"
               variant="outline"
-              disabled={batchOperating}
+              disabled={batchOperating || hiddenSelected > 0}
               onClick={() => handleBatchEnable(false)}
               className="bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 shadow-none"
             >
@@ -455,7 +440,7 @@ export default function ProvidersPage() {
             <Button
               size="sm"
               variant="outline"
-              disabled={batchOperating}
+              disabled={batchOperating || hiddenSelected > 0}
               onClick={handleBatchDelete}
               className="bg-white dark:bg-slate-800 text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 hover:text-rose-700 dark:hover:text-rose-300 border-rose-200 dark:border-rose-800 shadow-none"
             >
@@ -472,6 +457,8 @@ export default function ProvidersPage() {
         ) : null}
       </div>
 
+      {updatedAt && <p className="text-xs text-slate-500">上次成功更新：{new Date(updatedAt).toLocaleTimeString()}</p>}
+      {hiddenSelected > 0 && <div role="alert" className="text-sm text-amber-700">已选项中有 {hiddenSelected} 项不在当前结果中，已暂停批量操作。<Button size="sm" variant="ghost" onClick={() => setSelectedIds(new Set())}>清除选择</Button></div>}
       <Card>
         {filteredItems.length ? (
           <div className="overflow-x-auto -mx-4 -my-4 sm:mx-0 sm:my-0">

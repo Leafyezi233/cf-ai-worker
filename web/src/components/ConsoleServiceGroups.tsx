@@ -5,8 +5,8 @@ import { Button, Empty, Select, Spinner } from "./ui";
 import { useToast } from "./Toast";
 
 function selectionName(id: string | null, groups: ConsoleServiceGroup[]) {
-  if (id === null || id === "auto") return "自动选择";
-  if (id === "legacy") return "旧版默认路由";
+  if (id === null || id === "legacy") return "旧版默认路由";
+  if (id === "auto") return "自动路由";
   return groups.find(group => group.id === id)?.name ?? "不可用的分组（" + id + "）";
 }
 
@@ -29,7 +29,7 @@ function GroupSelection({ label, current, groups, inheritLabel, disabled, confir
     <label className="block text-sm"><span>{label}</span>
       <Select className="mt-1" value={value} disabled={disabled || busy} onChange={event => { setValue(event.target.value); setConfirming(false); }}>
         <option value="">{inheritLabel}</option>
-        <option value="legacy">旧版默认（原模型路由与价格）</option><option value="auto">自动（输入价优先，再比较输出价）</option>
+        <option value="legacy">旧版默认路由（原模型路由与价格）</option><option value="auto">自动（候选顺序由令牌路由策略决定）</option>
         {groups.map(group => <option key={group.id} value={group.id}>{group.name}（× {group.multiplier}）</option>)}
         {value && value !== "auto" && value !== "legacy" && !groups.some(group => group.id === value) && <option value={value} disabled>当前分组不可选：{value}</option>}
       </Select>
@@ -64,15 +64,15 @@ export function ConsoleServiceGroups({ scope, tokens, onTokensChange, onChange }
   }
   return <section className="space-y-4 border-t border-slate-200 dark:border-slate-800 pt-4">
     <div className="flex items-center justify-between gap-2"><h3 className="text-sm font-medium">服务分组</h3><Button type="button" size="sm" variant="ghost" disabled={groupsQuery.loading || groupsQuery.isRefreshing} onClick={() => { void groupsQuery.refresh().catch(() => {}); }}>刷新</Button></div>
-    <p className="text-xs leading-relaxed text-slate-600 dark:text-slate-400">先查看当前生效的分组，再决定是否更改。自动选择先比较输入价，再比较输出价；失败时可能改用下一候选，费用按成功使用的分组计算。选择“旧版默认”则沿用原路由。模型广场只展示报价，不会更改分组。</p>
+    <p className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs leading-relaxed text-slate-600 dark:border-slate-800 dark:bg-slate-900/60 dark:text-slate-400">先核对当前生效设置，再单独修改账户默认、主 Token 或子 Token。空值表示沿用上一级；若账户默认也为空，则使用旧版默认路由。自动路由的候选顺序与失败切换由令牌策略决定，不保证选择最低报价。模型广场仅供比较，不会更改任何 Token。</p>
     {groupsQuery.error && <p role="alert" className="text-sm text-rose-600">分组信息加载失败：{groupsQuery.error.message}</p>}
     {groupsQuery.loading && !state ? <Spinner text="正在加载服务分组…" /> : state && <>
       <div className="grid gap-4 sm:grid-cols-2">
-        <div className="rounded-lg bg-slate-50 p-3 text-xs leading-relaxed dark:bg-slate-800/60"><div className="font-medium">账户默认 · 当前生效</div><div className="mt-1">{selectionName(state.default_service_group_id, groups)}</div><div className="mt-1 text-slate-500 dark:text-slate-400">主 Token 和未单独指定分组的子 Token 将使用此默认值。</div></div>
-        <div className="rounded-lg bg-slate-50 p-3 text-xs leading-relaxed dark:bg-slate-800/60"><div className="font-medium">主 Token · 当前生效</div><div className="mt-1">{selectionName(state.service_group_id ?? state.default_service_group_id, groups)}</div><div className="mt-1 text-slate-500 dark:text-slate-400">{state.service_group_id === null ? "继承账户默认" : "使用主 Token 自己的选择"}</div></div>
+        <div className="rounded-md border border-slate-200 bg-slate-50 p-3 text-xs leading-relaxed dark:border-slate-800 dark:bg-slate-900/60"><div className="font-medium">账户默认 · 当前值</div><div className="mt-1">{selectionName(state.default_service_group_id, groups)}</div><div className="mt-1 text-slate-500 dark:text-slate-400">主 Token 和未单独指定分组的子 Token 将使用此默认值。</div></div>
+        <div className="rounded-md border border-slate-200 bg-slate-50 p-3 text-xs leading-relaxed dark:border-slate-800 dark:bg-slate-900/60"><div className="font-medium">主 Token · 有效配置</div><div className="mt-1">{selectionName(state.service_group_id ?? state.default_service_group_id, groups)}</div><div className="mt-1 text-slate-500 dark:text-slate-400">{state.service_group_id === null ? "继承账户默认" : "使用主 Token 自己的选择"}</div></div>
       </div>
       <div className="grid gap-4 sm:grid-cols-2">
-        <GroupSelection key={"default:" + state.default_service_group_id} label="更改账户默认" current={state.default_service_group_id} groups={groups} inheritLabel="自动选择（不设固定默认）" disabled={!!groupsQuery.error} confirmText={inheriting ? "更改后将影响 " + inheriting + " 个使用账户默认分组的 Token（包括未单独设置分组的主 Token）；已设置独立分组的 Token 不受影响。" : undefined} onSave={id => saveAccount({ default_service_group_id: id })} />
+        <GroupSelection key={"default:" + state.default_service_group_id} label="更改账户默认" current={state.default_service_group_id} groups={groups} inheritLabel="不设账户默认（使用旧版默认路由）" disabled={!!groupsQuery.error} confirmText={inheriting ? "更改后将影响 " + inheriting + " 个使用账户默认分组的 Token（包括未单独设置分组的主 Token）；已设置独立分组的 Token 不受影响。" : undefined} onSave={id => saveAccount({ default_service_group_id: id })} />
         <GroupSelection key={"master:" + state.service_group_id} label="更改主 Token" current={state.service_group_id} groups={groups} inheritLabel="继承账户默认" disabled={!!groupsQuery.error} onSave={id => saveAccount({ service_group_id: id })} />
       </div>
       <div className="space-y-3">{tokens.filter(token => !token.revoked).map(token => {
@@ -80,7 +80,7 @@ export function ConsoleServiceGroups({ scope, tokens, onTokensChange, onChange }
         const tokenSelection = configured ? configured.service_group_id : token.service_group_id;
         const effectiveId = tokenSelection ?? state.default_service_group_id;
         return <div key={token.id} className="grid gap-2 rounded-lg border border-slate-200 p-3 dark:border-slate-800 sm:grid-cols-2 sm:items-start">
-          <div className="text-xs leading-relaxed"><div className="font-medium">子 Token · {token.name} · 当前生效</div><div className="mt-1">{selectionName(effectiveId, groups)}</div><div className="mt-1 text-slate-500 dark:text-slate-400">{tokenSelection === null ? "继承账户默认" : "使用此子 Token 的独立选择"}</div></div>
+          <div className="text-xs leading-relaxed"><div className="font-medium">子 Token · {token.name} · 有效配置</div><div className="mt-1">{selectionName(effectiveId, groups)}</div><div className="mt-1 text-slate-500 dark:text-slate-400">{tokenSelection === null ? "继承账户默认" : "使用此子 Token 的独立选择"}</div></div>
           <GroupSelection key={token.id + ":" + token.service_group_id} label="更改此子 Token" current={tokenSelection} groups={groups} inheritLabel="继承账户默认" disabled={!!groupsQuery.error} onSave={async id => {
             await consoleAccountApi.setTokenServiceGroup(token.id, id);
             await onTokensChange();
@@ -89,8 +89,8 @@ export function ConsoleServiceGroups({ scope, tokens, onTokensChange, onChange }
       })}</div>
       {!groups.length && <Empty text="暂无固定分组，可选择自动或旧版默认路由。" />}
       <div className="space-y-3 rounded-lg border border-slate-200 dark:border-slate-800 p-3">
-        <div><h4 className="text-sm font-medium">查看分组报价（只读）</h4><p className="mt-1 text-xs leading-relaxed text-slate-500">这里只查看报价，不会更改任何 Token 的分组。模型按账户权限展示。自动选择显示首选报价；允许重试的请求失败后可能改用下一候选，费用按成功使用的分组计算。视频任务固定提交渠道，不自动重发。</p></div>
-        <label className="block text-sm">选择要查看的分组<Select className="mt-1" value={previewId} onChange={event => setPreviewId(event.target.value)}><option value="">选择分组…</option><option value="legacy">旧版默认（原模型路由与价格）</option><option value="auto">自动（输入价优先，再比较输出价）</option>{groups.map(group => <option key={group.id} value={group.id}>{group.name}</option>)}</Select></label>
+        <div><h4 className="text-sm font-medium">查看分组报价（只读）</h4><p className="mt-1 text-xs leading-relaxed text-slate-500">这里只查看报价，不会更改任何 Token 的分组。模型按账户权限展示；自动报价供比较，不代表固定选择最低价。实际费用按请求命中的分组与价格计算。视频任务固定提交渠道，不自动重发。</p></div>
+        <label className="block text-sm">选择要查看的分组<Select className="mt-1" value={previewId} onChange={event => setPreviewId(event.target.value)}><option value="">选择分组…</option><option value="legacy">旧版默认路由（原模型路由与价格）</option><option value="auto">自动（候选顺序由令牌路由策略决定）</option>{groups.map(group => <option key={group.id} value={group.id}>{group.name}</option>)}</Select></label>
         {preview.loading && <Spinner text="正在加载报价…" />}
         {preview.error && <p role="alert" className="text-sm text-rose-600">报价加载失败：{preview.error.message}</p>}
         {previewId && preview.data && !preview.loading && !preview.error && <><p className="text-xs text-slate-600 dark:text-slate-400">{preview.data.model_count} 个可用模型 · 人民币。Token 价格按百万 Token 计；按次价格按调用计。</p>

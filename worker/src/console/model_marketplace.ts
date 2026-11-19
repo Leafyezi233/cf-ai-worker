@@ -68,7 +68,10 @@ return {
 export async function modelMarketplace(env: Env, device: AuthedDevice) {
   await ensureSchema(env);
   const selectedId = device.service_group_id ?? device.default_service_group_id ?? null;
-  const currentId = selectedId === "auto" || selectedId === "legacy" ? null : selectedId;
+  const policy = device.token_routing_policy?.policy;
+  const inferredMode = selectedId === "auto" ? "auto" : selectedId === "legacy" || selectedId === null ? "legacy" : "fixed";
+  const routingMode = policy?.mode ?? inferredMode;
+  const currentId = routingMode === "fixed" ? policy?.group_ids[0] ?? selectedId : null;
   const result = await env.DB.prepare(
     "SELECT g.* FROM service_groups g WHERE g.enabled = 1 AND (g.selectable = 1 OR g.id = ?) " +
     "AND (g.public_selectable = 1 OR EXISTS (SELECT 1 FROM device_service_groups d " +
@@ -76,7 +79,7 @@ export async function modelMarketplace(env: Env, device: AuthedDevice) {
   ).bind(currentId, device.id).all<ServiceGroupRow>();
   const [catalogues, legacy] = await Promise.all([
     projectServiceModelsForGroups(env, device, result.results || []),
-    currentId === null
+    selectedId === null || selectedId === "auto" || selectedId === "legacy"
       ? Promise.all([listModelsForDevice(env, device), listGroupsForDevice(env, device)])
         .then(([models, groups]): ModelProjectionRow[] => [...models, ...groups])
       : Promise.resolve([]),
@@ -96,7 +99,7 @@ export async function modelMarketplace(env: Env, device: AuthedDevice) {
     return !names || ![...names].some((name) => name !== model.model_name);
   });
   const offers = [
-    ...visibleLegacy.map((model) => ({ model, service_group_id: null as string | null, service_group_name: "旧版默认", is_current: true })),
+    ...visibleLegacy.map((model) => ({ model, service_group_id: null as string | null, service_group_name: "旧版默认", is_current: routingMode === "legacy" })),
     ...catalogues.flatMap(({ group, models }) => models.map((model) => ({
       model, service_group_id: group.id, service_group_name: group.name, is_current: group.id === currentId,
     }))),
@@ -115,6 +118,13 @@ export async function modelMarketplace(env: Env, device: AuthedDevice) {
   const tzOffsetMinutes = PEAK_PRICING_DEFAULT_TZ_OFFSET_MINUTES;
   return {
     model_scope: device.model_scope || "all",
+    routing: {
+      mode: routingMode,
+      selection: routingMode === "auto" || routingMode === "multi" ? policy?.selection ?? null : null,
+      failure_fallback: routingMode === "auto" || routingMode === "multi" ? policy?.failure_fallback ?? false : false,
+      fixed_group_id: routingMode === "fixed" ? currentId : null,
+      fixed_group_name: routingMode === "fixed" ? (result.results || []).find(group => group.id === currentId)?.name ?? null : null,
+    },
     model_count: offers.length,
     peak_pricing_tz_offset_minutes: tzOffsetMinutes,
     items: offers.map(({ model, ...offer }) => ({

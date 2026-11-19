@@ -5,6 +5,7 @@ let values: Map<string,string>;
 let fetchMock: ReturnType<typeof vi.fn>;
 const ok = () => new Response(JSON.stringify({ item: { id: "s1" } }), { status: 200, headers: { "Content-Type": "application/json" } });
 beforeEach(() => {
+  vi.stubGlobal("window", { location: { pathname: "/admin-prefix-example/monthly-passes" } });
   values = new Map();
   vi.stubGlobal("sessionStorage", { getItem: (k: string) => values.get(k) ?? null, setItem: (k: string,v: string) => values.set(k,v), removeItem: (k: string) => values.delete(k) });
   fetchMock = vi.fn(async () => ok()); vi.stubGlobal("fetch", fetchMock);

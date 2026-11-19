@@ -11,8 +11,8 @@ function offer(group: string, input: number, output: number, extra: Record<strin
     is_current: false, pricing_mode: "priced", input_price_per_m: input, output_price_per_m: output,
     billing_unit: "token", chat_endpoint: "/v1/chat/completions", supports_reasoning: false, ...extra };
 }
-function render(items: unknown[]) {
-  return renderToStaticMarkup(createElement(ConsoleModelsSquare, { models: { items }, loading: false, error: null }));
+function render(items: unknown[], routing?: { mode: "auto" | "legacy" | "fixed" | "multi"; selection: "ordered" | "input_price" | null; failure_fallback: boolean; fixed_group_id: string | null; fixed_group_name: string | null }) {
+  return renderToStaticMarkup(createElement(ConsoleModelsSquare, { models: { items, routing }, loading: false, error: null }));
 }
 function plain(html: string) { return html.replace(/<[^>]*>/g, ""); }
 
@@ -23,12 +23,23 @@ describe("model marketplace cards (server rendering, not browser E2E)", () => {
     const text = plain(html);
     expect(text).toContain("输入最低¥1/M tokeninput-cheap");
     expect(text).toContain("输出最低¥2/M tokenoutput-cheap");
-    expect(text).toContain("不会自动切换");
+    expect(text).toContain("不会修改 Token");
     expect(text).toContain("不能代表同一次调用的总价");
   });
   it("keeps all tied group sources and current labels", () => {
-    const text = plain(render([offer("alpha", 2, 4, { is_current: true }), offer("beta", 2, 4)]));
-    expect(text).toContain("输入最低¥2/M tokenalpha（当前）、beta");
+    const text = plain(render([offer("alpha", 2, 4, { is_current: true }), offer("beta", 2, 4)], { mode: "fixed", selection: null, failure_fallback: false, fixed_group_id: "alpha", fixed_group_name: "alpha" }));
+    expect(text).toContain("输入最低¥2/M token令牌固定选择：alpha、beta");
+  });
+  it("explains automatic routing order without claiming the lowest quote is selected", () => {
+    const text = plain(render([offer("alpha", 1, 2)], { mode: "auto", selection: "input_price", failure_fallback: true, fixed_group_id: null, fixed_group_name: null }));
+    expect(text).toContain("按输入价优先排序（按次模型按次价比较）");
+    expect(text).toContain("不保证最低报价就是实际调用组");
+    expect(text).not.toContain("此 Token 固定选择");
+  });
+  it("states that multi-group routing has no unique current group", () => {
+    const text = plain(render([offer("alpha", 1, 2)], { mode: "multi", selection: "ordered", failure_fallback: false, fixed_group_id: null, fixed_group_name: null }));
+    expect(text).toContain("没有唯一当前组");
+    expect(text).not.toContain("此 Token 固定选择");
   });
   it("excludes unset zero but includes explicitly free offers", () => {
     const unset = offer("unset-group", 0, 0, { pricing_mode: "unset" });
@@ -63,7 +74,7 @@ describe("group quote readability (SSR, not browser layout)", () => {
     expect(html.indexOf("输入")).toBeLessThan(html.indexOf("<details"));
     expect(html.indexOf("¥0.85")).toBeLessThan(html.indexOf("<details"));
     expect(html).toContain("grid-cols-2");
-    expect(plain(html)).toContain("当前组");
+    expect(plain(html)).toContain("此 Token 固定选择");
     expect(html).not.toContain("claude-opus-5-5");
     expect(html).not.toContain("已定价");
   });

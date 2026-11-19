@@ -1,7 +1,7 @@
 import { Hono } from "hono";
-import { HTTPException } from "hono/http-exception";
+import { handleHttpError } from "./utils/http-errors";
 import type { Env } from "./types";
-import { adminApp } from "./admin";
+import { adminEntry } from "./middleware/adminEntry";
 import { gatewayApp } from "./gateway";
 import {
   listProviders,
@@ -26,10 +26,20 @@ import { ipRateLimit } from "./middleware/ipRateLimit";
 export const app = new Hono<{ Bindings: Env }>();
 
 app.use("*", applySecurityHeaders);
+app.use("*", adminEntry);
 
 app.use("*", async (c, next) => {
   const hasAuth = !!(c.req.header("authorization") || c.req.header("x-api-key"));
   const isHtml = c.req.header("accept")?.includes("text/html");
+
+  const personalPage = ["/me", "/me/", "/me/index.html"].includes(c.req.path);
+  if (personalPage && ["GET", "HEAD"].includes(c.req.method)) {
+    c.header("Cache-Control", "no-store");
+    return c.redirect("/console", 302);
+  }
+  if (c.req.path === "/me" || c.req.path.startsWith("/me/")) {
+    return c.json({ error: "not_found" }, 404);
+  }
 
   if ((!isHtml || hasAuth) && c.req.path.length > 1 && c.req.path.endsWith("/")) {
     const target = new URL(c.req.raw.url);
@@ -37,8 +47,9 @@ app.use("*", async (c, next) => {
     return c.redirect(target.toString(), 308);
   }
 
-  if (c.req.method === "GET" && c.req.path === "/" && isHtml && !hasAuth) {
-    return c.redirect("/me/", 302);
+  if (["GET", "HEAD"].includes(c.req.method) && c.req.path === "/" && isHtml && !hasAuth) {
+    c.header("Cache-Control", "no-store");
+    return c.redirect("/console", 302);
   }
 
   if (
@@ -78,13 +89,14 @@ app.use("/console/*", async (c, next) => {
 app.get("/health", (c) => c.json({ ok: true, service: "personal-ai-gateway" }));
 app.get("/api/tags", (c) => listOllamaTagsHandler(c));
 
-app.route("/api", adminApp);
 app.route("/v1", gatewayApp);
 app.route("/console", consoleApp);
 app.route("/", gatewayApp);
 
 app.all("*", async (c) => {
-  if (c.env.ASSETS) {
+  const path = c.req.path;
+  const publicAsset = ["/", "/index.html", "/console", "/favicon.svg", "/theme-boot.js"].includes(path) || /^\/assets\/[A-Za-z0-9_.-]+$/.test(path);
+  if (publicAsset && ["GET", "HEAD"].includes(c.req.method) && c.env.ASSETS) {
     return c.env.ASSETS.fetch(c.req.raw);
   }
   return c.json({ error: "not_found" }, 404);
@@ -92,11 +104,7 @@ app.all("*", async (c) => {
 
 app.notFound((c) => c.json({ error: "not_found" }, 404));
 
-app.onError((err, c) => {
-  if (err instanceof HTTPException) return c.json({ error: err.message }, err.status);
-  console.error("Worker unhandled error:", err);
-  return c.json({ error: "internal_server_error" }, 500);
-});
+app.onError(handleHttpError);
 
 export { RateLimiterDO };
 

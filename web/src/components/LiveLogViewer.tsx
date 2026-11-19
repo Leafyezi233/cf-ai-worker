@@ -11,11 +11,20 @@ export function LiveLogViewer() {
   const lastIdRef = useRef<number | undefined>(undefined);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [autoScroll, setAutoScroll] = useState(true);
+  const [error, setError] = useState("");
+  const mounted = useRef(true);
+  const inFlight = useRef(false);
+  const generation = useRef(0);
 
   const fetchNewLogs = async () => {
+    if (!mounted.current || inFlight.current || document.visibilityState === "hidden") return;
+    inFlight.current = true;
+    const current = generation.current;
     try {
       const q = lastIdRef.current ? `?after_id=${lastIdRef.current}&limit=25` : "?limit=20";
       const res = await api.get<{ items: UsageItem[] }>(`/api/usage/latest${q}`);
+      if (!mounted.current || current !== generation.current) return;
+      setError("");
       if (res.items && res.items.length > 0) {
         setLogs((prev) => {
           const existingIds = new Set(prev.map((l) => l.id));
@@ -26,19 +35,26 @@ export function LiveLogViewer() {
           return combined;
         });
       }
-    } catch {
+    } catch (err) {
+      if (mounted.current && current === generation.current) setError(err instanceof Error ? err.message : "实时日志读取失败");
+    } finally {
+      inFlight.current = false;
     }
   };
 
   useEffect(() => {
+    mounted.current = true;
     setLoading(true);
-    fetchNewLogs().finally(() => setLoading(false));
+    fetchNewLogs().finally(() => { if (mounted.current) setLoading(false); });
+    return () => { mounted.current = false; generation.current++; };
   }, []);
 
   useEffect(() => {
     if (!isLive) return;
-    const interval = setInterval(fetchNewLogs, 2500);
-    return () => clearInterval(interval);
+    const interval = setInterval(fetchNewLogs, 10_000);
+    const onVisible = () => { if (document.visibilityState === "visible") void fetchNewLogs(); };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => { clearInterval(interval); document.removeEventListener("visibilitychange", onVisible); };
   }, [isLive]);
 
   useEffect(() => {
@@ -58,7 +74,7 @@ export function LiveLogViewer() {
                 isLive ? "bg-emerald-500 animate-pulse shadow-xs shadow-emerald-500/50" : "bg-slate-400"
               }`}
             />
-            {isLive ? "实时推流中 (2.5s 刷新)" : "已暂停实时流"}
+            {isLive ? "实时日志 (10s 刷新，后台暂停)" : "已暂停实时流"}
           </span>
           <span className="text-[11px] text-slate-400 dark:text-slate-500 font-mono">
             ({logs.length} 条记录)
@@ -78,6 +94,7 @@ export function LiveLogViewer() {
             size="sm"
             variant="outline"
             onClick={() => {
+              generation.current++;
               setLogs([]);
               lastIdRef.current = undefined;
             }}
@@ -90,6 +107,7 @@ export function LiveLogViewer() {
         </div>
       </div>
 
+      {error ? <p role="alert" className="text-xs text-red-600">刷新失败：{error}；保留已读取日志。</p> : null}
       { }
       <div
         ref={scrollContainerRef}

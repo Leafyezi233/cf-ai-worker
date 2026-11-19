@@ -1,6 +1,9 @@
-import { useEffect, useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { useModelCategories, ModelCategoryAssignment, ModelCategoryBadges, ModelCategoryFilter, matchesModelCategory, CATEGORY_RENAME_HELP } from "../components/ModelCategories";
 import { api } from "../api/client";
+import { useAdminFilters } from "../hooks/useAdminFilters";
+import { AdminListToolbar } from "../components/AdminListToolbar";
+import { invalidateCache } from "../hooks/useQuery";
 import { ServiceModelNamesPanel } from "../components/ServiceModelNamesPanel";
 import { ModelGroupMergePanel } from "../components/ModelGroupMergePanel";
 import type { DeviceItem, ModelGroupItem, ModelItem } from "../types";
@@ -53,6 +56,7 @@ export default function ServiceGroupsPage() {
   const categories = useModelCategories();
   const [categoryFilter, setCategoryFilter] = useState("");
   const [categorySelection, setCategorySelection] = useState<string[]>([]);
+  const [filters, setFilter, resetFilters] = useAdminFilters({ q: "", enabled: "", sort: "", public: "", selectable: "", target: "" });
   const [groups, setGroups] = useState<ServiceGroup[]>([]);
   const [models, setModels] = useState<ModelItem[]>([]);
   const [modelGroups, setModelGroups] = useState<ModelGroupItem[]>([]);
@@ -66,21 +70,45 @@ export default function ServiceGroupsPage() {
   const [busy, setBusy] = useState(false);
   const [accountFilter, setAccountFilter] = useState("");
 
-  async function load() {
-    setLoading(true); setError("");
+  const [loadError, setLoadError] = useState("");
+  const [updatedAt, setUpdatedAt] = useState<number>();
+  const loadSequence = useRef(0);
+  async function load(includeOptions = false) {
+    const sequence = ++loadSequence.current;
+    setLoading(true); setLoadError("");
     try {
-      const [sg, m, mg, d] = await Promise.all([
+      const [sg, options] = await Promise.all([
         api.get<{ items: ServiceGroup[] }>("/api/service-groups"),
-        api.get<{ items: ModelItem[] }>("/api/models"),
-        api.get<{ items: ModelGroupItem[] }>("/api/model-groups"),
-        api.get<{ items: DeviceItem[] }>("/api/devices"),
+        includeOptions ? Promise.all([
+          api.get<{ items: ModelItem[] }>("/api/models"),
+          api.get<{ items: ModelGroupItem[] }>("/api/model-groups"),
+          api.get<{ items: DeviceItem[] }>("/api/devices/choices"),
+        ]) : undefined,
       ]);
-      setGroups(sg.items); setModels(m.items); setModelGroups(mg.items); setDevices(d.items);
+      if (sequence !== loadSequence.current) return;
+      setGroups(sg.items);
+      if (options) { setModels(options[0].items); setModelGroups(options[1].items); setDevices(options[2].items); }
+      setUpdatedAt(Date.now());
       return sg.items;
-    } catch (err) { setError(errorMessage(err)); }
-    finally { setLoading(false); }
+    } catch (err) { if (sequence === loadSequence.current) setLoadError(errorMessage(err)); }
+    finally { if (sequence === loadSequence.current) setLoading(false); }
   }
-  useEffect(() => { void load(); }, []);
+  useEffect(() => { void load(true); return () => { loadSequence.current++; }; }, []);
+  const filteredGroups = useMemo(() => {
+    const q = filters.q.trim().toLowerCase();
+    const result = groups.filter(g => (!filters.enabled || !!g.enabled === (filters.enabled === "1")) &&
+      (!filters.public || !!g.public_selectable === (filters.public === "1")) &&
+      (!filters.selectable || !!g.selectable === (filters.selectable === "1")) &&
+      (!filters.target || g.models?.some(m => m.target_type === filters.target)) &&
+      (!q || [g.id, g.name, g.description, ...(g.models ?? []).flatMap(m => [m.model_key, m.target_id])].some(value => value?.toLowerCase().includes(q))));
+    if (filters.sort) result.sort((a, b) => (a.name.localeCompare(b.name) || a.id.localeCompare(b.id)) * (filters.sort === "name-desc" ? -1 : 1));
+    return result;
+  }, [groups, filters]);
+  function invalidateRelated() {
+    invalidateCache("admin-service-groups");
+    invalidateCache("devices-");
+    invalidateCache("dashboard-");
+  }
 
   function open(group: ServiceGroup | null) {
     setSelected(group?.id ?? null); setError(""); setCategorySelection([]); setCategoryFilter("");
@@ -109,7 +137,7 @@ export default function ServiceGroupsPage() {
         const result = await api.post<{ item: ServiceGroup }>("/api/service-groups", body);
         open(result.item);
       }
-      toast.success("服务分组已保存"); await load();
+      invalidateRelated(); toast.success("服务分组已保存"); await load();
     } catch (err) { setError(errorMessage(err)); }
     finally { setBusy(false); }
   }
@@ -128,26 +156,32 @@ export default function ServiceGroupsPage() {
     try {
       await api.put("/api/service-groups/" + encodeURIComponent(selected) + "/" + section,
         section === "models" ? { models: mappings.map(m => ({ ...(m.id ? { id: m.id } : {}), model_key: m.model_key.trim(), target_type: m.target_type, target_id: m.target_id, pricing_json: m.pricing, member_ids_json: m.member_ids })) } : { device_ids: grants });
-      toast.success(section === "models" ? "模型映射已保存" : "账户授权已保存"); await load();
+      invalidateRelated(); toast.success(section === "models" ? "模型映射已保存" : "账户授权已保存"); await load();
     } catch (err) { setError(errorMessage(err)); }
     finally { setBusy(false); }
   }
   async function deleteGroup() {
     if (!selected || !window.confirm("确定删除此服务分组？已绑定账户或 Token 的分组无法删除。")) return;
     setBusy(true); setError("");
-    try { await api.del("/api/service-groups/" + encodeURIComponent(selected)); open(null); await load(); toast.success("服务分组已删除"); }
+    try { await api.del("/api/service-groups/" + encodeURIComponent(selected)); open(null); invalidateRelated(); await load(); toast.success("服务分组已删除"); }
     catch (err) { setError(errorMessage(err)); } finally { setBusy(false); }
   }
   const chosenGroup = groups.find(g => g.id === selected);
   const categoryMappingId = (m: Mapping) => chosenGroup?.models?.find(saved => saved.model_key === m.model_key && (!m.id || saved.id === m.id))?.id;
   return <div className="space-y-5">
-    <div className="flex items-start justify-between gap-3"><div><h1 className="text-xl font-semibold">服务分组</h1><p className="mt-1 text-sm text-slate-500">为不同账户配置模型路由、价格倍率与私有授权。各区域分别保存。</p></div><Button variant="secondary" disabled={busy || loading} onClick={() => void load()}>刷新列表</Button></div>
+    <div className="flex items-start justify-between gap-3"><div><h1 className="text-xl font-semibold">服务分组</h1><p className="mt-1 text-sm text-slate-500">为不同账户配置模型路由、价格倍率与私有授权。各区域分别保存。</p></div><Button variant="secondary" disabled={busy || loading} onClick={() => void load(true)}>刷新列表</Button></div>
     {error && <div role="alert" className="rounded-lg bg-red-50 dark:bg-red-950/30 p-3 text-sm text-red-600">{error}</div>}
-    {loading && <Spinner text="正在读取服务分组…" />}
+    <AdminListToolbar filters={filters} onChange={setFilter} onReset={resetFilters} total={groups.length} count={filteredGroups.length} loading={loading} error={loadError ? "读取失败：" + loadError + "；如有旧数据仍予保留" : null} searchPlaceholder="搜索服务分组 / 公开模型名 / 目标 ID">
+      <Select aria-label="公开范围" className="!w-auto" value={filters.public} onChange={e => setFilter("public", e.target.value)}><option value="">公开与私有</option><option value="1">公开</option><option value="0">私有</option></Select>
+      <Select aria-label="可自选状态" className="!w-auto" value={filters.selectable} onChange={e => setFilter("selectable", e.target.value)}><option value="">全部自选状态</option><option value="1">可自选</option><option value="0">不可自选</option></Select>
+      <Select aria-label="映射目标类型" className="!w-auto" value={filters.target} onChange={e => setFilter("target", e.target.value)}><option value="">全部目标类型</option><option value="group">模型组</option><option value="model">供应商模型</option></Select>
+    </AdminListToolbar>
+    {updatedAt && <p className="text-xs text-slate-500">上次成功更新：{new Date(updatedAt).toLocaleTimeString()} · 刷新列表不会覆盖编辑草稿</p>}
+    {loading && !groups.length && <Spinner text="正在读取服务分组…" />}
     <div className="grid gap-5 lg:grid-cols-[260px_minmax(0,1fr)]">
       <Card title="分组列表" action={<Button size="sm" disabled={busy} onClick={() => open(null)}>新建</Button>}>
-        <div className="space-y-2">{groups.length === 0 && !loading && <p className="text-sm text-slate-500">暂无服务分组</p>}{groups.map(g => <button type="button" disabled={busy} key={g.id} onClick={() => open(g)} className={"w-full rounded-lg border p-3 text-left " + (selected === g.id ? "border-blue-500 bg-blue-50 dark:bg-blue-950/30" : "border-slate-200 dark:border-slate-700")}>
-          <div className="font-medium break-all">{g.name}</div><div className="mt-1 flex flex-wrap gap-1"><Badge tone={g.enabled ? "green" : "slate"}>{g.enabled ? "启用" : "停用"}</Badge><Badge>{g.public_selectable ? "公开" : "私有"}</Badge><span className="text-xs text-slate-500">× {g.multiplier}</span></div>
+        <div className="space-y-2">{filteredGroups.length === 0 && !loading && !loadError && <p className="text-sm text-slate-500">{groups.length ? "无匹配服务分组，请调整筛选" : "暂无服务分组"}</p>}{filteredGroups.map(g => <button type="button" disabled={busy} key={g.id} onClick={() => open(g)} className={"w-full rounded-lg border p-3 text-left " + (selected === g.id ? "border-blue-500 bg-blue-50 dark:bg-blue-950/30" : "border-slate-200 dark:border-slate-700")}>
+          <div className="font-medium break-all">{g.name}</div><div className="mt-1 flex flex-wrap gap-1"><Badge tone={g.enabled ? "green" : "slate"}>{g.enabled ? "启用" : "停用"}</Badge><Badge>{g.public_selectable ? "公开" : "私有"}</Badge><Badge>{g.selectable ? "可自选" : "不可自选"}</Badge><span className="text-xs text-slate-500">{g.models?.length ?? 0} 条映射</span><span className="text-xs text-slate-500">× {g.multiplier}</span></div>
         </button>)}</div>
       </Card>
       <div className="min-w-0 space-y-5">

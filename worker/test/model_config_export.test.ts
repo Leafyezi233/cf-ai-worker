@@ -89,6 +89,10 @@ describe("DSH profile contract and public capability projection", () => {
 });
 
 const requireWeb = createRequire(new URL("../../web/package.json", import.meta.url));
+vi.doMock((requireWeb as any).resolve("react-router-dom"), () => ({
+  useLocation: () => ({ pathname: "/admin/models", search: "", hash: "" }),
+  useNavigate: () => vi.fn(),
+}));
 const { readFileSync } = requireWeb("node:fs");
 const React = requireWeb("react");
 const { renderToStaticMarkup } = requireWeb("react-dom/server");
@@ -146,7 +150,7 @@ function renderAdmin(format: string, catalog: string | { models: ModelConfigMeta
     const original = dispatcher.useState;
     dispatcher.useState = (initial: unknown) => {
       const current = index++;
-      return original(current === 11 ? open : current === 12 ? format : current === 23 ? catalog : initial);
+      return original(current === 8 ? open : current === 9 ? format : current === 20 ? catalog : initial);
     };
     try { return ModelsPage(); } finally { dispatcher.useState = original; }
   }

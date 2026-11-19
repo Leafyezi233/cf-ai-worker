@@ -61,7 +61,7 @@ export const modelsApp = new Hono<{ Bindings: Env }>();
 modelsApp.route("/protocol-probes", protocolProbesApp);
 
 modelsApp.get("/", async (c) => {
-  const items = await listModels(c.env, { includeSecrets: false });
+  const items = await listModels(c.env, { includeSecrets: false, adminProjection: true });
   return c.json({ items });
 });
 

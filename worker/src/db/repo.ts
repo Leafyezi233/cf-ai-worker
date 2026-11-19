@@ -229,10 +229,12 @@ function modelReferenceWriteStatements(
   ];
 }
 
-export async function listModels(env: Env, opts: { includeSecrets?: boolean } = {}) {
+export async function listModels(env: Env, opts: { includeSecrets?: boolean; adminProjection?: boolean } = {}) {
   await ensureSchema(env);
   const res = await env.DB.prepare(
-    "SELECT m.*, p.name as provider_name, p.type as provider_type, p.api_key as provider_api_key, p.secret_name as provider_secret_name, p.config_json as provider_config_json, p.endpoint as provider_endpoint " +
+    (opts.adminProjection
+      ? "SELECT m.*, p.name as provider_name, p.type as provider_type "
+      : "SELECT m.*, p.name as provider_name, p.type as provider_type, p.api_key as provider_api_key, p.secret_name as provider_secret_name, p.config_json as provider_config_json, p.endpoint as provider_endpoint ") +
       "FROM models m LEFT JOIN providers p ON p.id = m.provider_id ORDER BY m.created_at DESC"
   ).all<ModelWithProvider>();
   const rows = (res.results as unknown as ModelWithProvider[]) || [];
@@ -2538,6 +2540,10 @@ export async function listUsage(
     model?: string;
     device_id?: string;
     sub_token_id?: string;
+    service_group_id?: string;
+    request_id?: string;
+    status?: "success" | "error" | number;
+    cursor?: { created_at: number; id: number };
     limit: number;
     offset: number;
   }
@@ -2546,13 +2552,20 @@ export async function listUsage(
   const where: string[] = [];
   const binds: unknown[] = [];
   if (opts.from !== undefined) { where.push("created_at >= ?"); binds.push(opts.from); }
-  if (opts.to !== undefined) { where.push("created_at <= ?"); binds.push(opts.to); }
+  const upper = opts.cursor ? Math.min(opts.to ?? opts.cursor.created_at, opts.cursor.created_at) : opts.to;
+  if (upper !== undefined) { where.push("created_at <= ?"); binds.push(upper); }
   if (opts.provider_id) { where.push("provider_id = ?"); binds.push(opts.provider_id); }
   if (opts.model) { where.push("model = ?"); binds.push(opts.model); }
   if (opts.device_id) { where.push("device_id = ?"); binds.push(opts.device_id); }
   if (opts.sub_token_id) { where.push("sub_token_id = ?"); binds.push(opts.sub_token_id); }
+  if (opts.service_group_id) { where.push("service_group_id = ?"); binds.push(opts.service_group_id); }
+  if (opts.request_id) { where.push("request_id = ?"); binds.push(opts.request_id); }
+  if (opts.status === "error") where.push("status_code >= 400");
+  else if (opts.status === "success") where.push("status_code < 400");
+  else if (typeof opts.status === "number") { where.push("status_code = ?"); binds.push(opts.status); }
+  if (opts.cursor) { where.push("(created_at, id) < (?, ?)"); binds.push(opts.cursor.created_at, opts.cursor.id); }
   const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
-  binds.push(opts.limit, opts.offset);
+  binds.push(opts.limit, opts.cursor ? 0 : opts.offset);
   const rows = await env.DB.prepare(
     `SELECT * FROM usage ${whereSql} ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?`
   ).bind(...binds).all<UsageRow>();

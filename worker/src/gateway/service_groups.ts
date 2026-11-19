@@ -184,6 +184,10 @@ function buildRoute(group: ServiceGroupRow, mapping: ServiceGroupModelRow, devic
     )) return unavailable();
   if (resolveModelType(billing) === "embedding" && embeddingPoolError(billing, selected)) return unavailable();
   if (resolveModelType(billing) === "video" && (videoModelError(billing) || selected.some(member => videoModelError(member)))) return unavailable();
+  let groupRewrite: unknown;
+  if (mapping.target_type === "group") {
+    try { groupRewrite = JSON.parse(original.config_json || "{}").model_rewrite; } catch { return unavailable(); }
+  }
   const members = selected.map((member) => {
     let config: Record<string, unknown> = {};
     if (member.config_json) {
@@ -191,10 +195,6 @@ function buildRoute(group: ServiceGroupRow, mapping: ServiceGroupModelRow, devic
         const parsed: unknown = JSON.parse(member.config_json);
         if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) config = parsed as Record<string, unknown>;
       } catch { return unavailable(); }
-    }
-    let groupRewrite: unknown;
-    if (mapping.target_type === "group") {
-      try { groupRewrite = JSON.parse(original.config_json || "{}").model_rewrite; } catch { return unavailable(); }
     }
     if (typeof groupRewrite === "string" && groupRewrite.trim()) config = { ...config, model_rewrite: groupRewrite };
     if (!(typeof config.model_rewrite === "string" && config.model_rewrite.trim())) {

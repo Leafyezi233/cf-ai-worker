@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { buildDshProfile, DSH_PROFILE_HELP } from "../utils/modelConfigExport";
+import { buildDshProfile, DSH_PROFILE_HELP, type ModelConfigMetadata } from "../utils/modelConfigExport";
 import { isEmbeddingModel, isTextModel, isVideoModel } from "../utils/modelType";
 import type { ConsoleModels } from "../api/consoleClient";
 import { Card, CopyButton } from "./ui";
@@ -65,7 +65,7 @@ const ENDPOINTS: { method: string; path: string; desc: string }[] = [
 
 const ERRORS: { code: string; meaning: string; fix: string }[] = [
   { code: "401", meaning: "API key 无效或未携带", fix: "确认 Authorization: Bearer 头，Token 在设备控制台创建" },
-  { code: "400 per_call_text_only", meaning: "按次计费模型收到纯文本请求", fix: "按次模型必须带图片输入（成本保护：纯文本会白烧一次上游全价）" },
+  { code: "400 per_call_text_only", meaning: "按次计费模型收到纯文本请求", fix: "该接口下此类按次模型需携带图片输入；纯文本请求请改用支持文本输入的模型" },
   { code: "413", meaning: "请求体超过网关上限（10MB）", fix: "压缩或减少图片；若 1MB 就报 413，是你自己链路的反代限制" },
   { code: "429", meaning: "触发限流", fix: "网关/console/billing 各有独立限流桶，稍后重试" },
 ];
@@ -74,15 +74,112 @@ function Mono({ children }: { children: React.ReactNode }) {
   return <code className="font-mono text-[12px] text-slate-700 dark:text-slate-200">{children}</code>;
 }
 
+export type ConnectionClient = "openai" | "anthropic" | "dsh";
+export type ConnectionProtocol = "/v1/chat/completions" | "/v1/responses" | "/v1/messages";
+type ConnectionModel = ModelConfigMetadata & Pick<Partial<ModelItem>, "protocol_capabilities">;
+
+export function connectionProtocol(client: ConnectionClient, protocol: ConnectionProtocol): ConnectionProtocol {
+  if (client === "anthropic") return "/v1/messages";
+  if (client === "dsh") return "/v1/chat/completions";
+  return protocol === "/v1/responses" ? protocol : "/v1/chat/completions";
+}
+
+export function connectionModels(items: readonly ConnectionModel[], client: ConnectionClient, protocol: ConnectionProtocol) {
+  const endpoint = connectionProtocol(client, protocol);
+  const byId = new Map<string, { id: string; label: string }>();
+  const blocked = new Set<string>();
+  const dshIds = client === "dsh"
+    ? new Set(buildDshProfile(items, BASE + "/v1").config.providers["cpg-gateway"]?.models.map((model) => model.id) ?? [])
+    : null;
+  for (const item of items) {
+    const id = item.alias || item.model_name || "";
+    if (!id.trim()) continue;
+    const endpoints = item.protocol_capabilities?.supported_endpoints ?? [item.chat_endpoint || "/v1/chat/completions"];
+    if (!isTextModel(item) || (item.input_modalities && !item.input_modalities.includes("text")) || !endpoints.includes(endpoint) || (dshIds && !dshIds.has(id))) {
+      blocked.add(id);
+      byId.delete(id);
+      continue;
+    }
+    if (!blocked.has(id)) byId.set(id, { id, label: item.display_name || id });
+  }
+  return [...byId.values()];
+}
+
+export function connectionConfig(items: readonly ConnectionModel[], client: ConnectionClient, protocol: ConnectionProtocol, selected: string) {
+  const options = connectionModels(items, client, protocol);
+  const model = options.find((option) => option.id === selected) ?? options[0];
+  if (!model) return null;
+  const endpoint = connectionProtocol(client, protocol);
+  return { baseURL: endpoint === "/v1/messages" ? BASE : BASE + "/v1", endpoint: BASE + endpoint, apiKey: "$CPG_API_KEY", model: model.id };
+}
+
+export function ConsoleConnectionWizard({ models, onOpenKeys }: {
+  models: ConsoleModels | null | undefined;
+  onOpenKeys?: () => void;
+}) {
+  const [client, setClient] = useState<ConnectionClient>("openai");
+  const [protocol, setProtocol] = useState<ConnectionProtocol>("/v1/chat/completions");
+  const [selected, setSelected] = useState("");
+  const endpoint = connectionProtocol(client, protocol);
+  const options = connectionModels(models?.items ?? [], client, endpoint);
+  const config = connectionConfig(models?.items ?? [], client, endpoint, selected);
+  const selectClass = "block w-full rounded-lg border border-slate-300 bg-white p-2 text-sm dark:border-slate-700 dark:bg-slate-900";
+  return <SectionCard title="接入向导 · 三步完成配置">
+    <p>只生成配置，不连接客户端、不发起付费测试；密钥由你在本地可信客户端填写，不会传给第三方配置服务。</p>
+    <fieldset className="space-y-2">
+      <legend className="font-medium">1 · 选择客户端与协议</legend>
+      <label className="block">客户端
+        <select aria-label="接入客户端" className={selectClass} value={client} onChange={(event) => { setClient(event.target.value as ConnectionClient); setSelected(""); }}>
+          <option value="openai">OpenAI 兼容客户端 / SDK</option>
+          <option value="anthropic">Anthropic Messages 客户端 / SDK</option>
+          <option value="dsh">DeepSeek Harness（DSH profile）</option>
+        </select>
+      </label>
+      <label className="block">请求协议
+        <select aria-label="接入协议" className={selectClass} value={endpoint} disabled={client !== "openai"} onChange={(event) => { setProtocol(event.target.value as ConnectionProtocol); setSelected(""); }}>
+          {client === "anthropic" ? <option value="/v1/messages">Anthropic Messages · /v1/messages</option> : <>
+            <option value="/v1/chat/completions">OpenAI Chat Completions · /v1/chat/completions</option>
+            {client === "openai" && <option value="/v1/responses">OpenAI Responses · /v1/responses</option>}
+          </>}
+        </select>
+      </label>
+      <p>以客户端实际支持的协议为准，不按模型名称猜测。Messages 请求必带 max_tokens；DSH 仍使用现有 OpenAI 文本 profile 格式。</p>
+    </fieldset>
+    <fieldset className="space-y-2">
+      <legend className="font-medium">2 · 选择兼容模型</legend>
+      <p>仅使用当前 Token / 当前路由权限的模型快照，不是模型广场的所有报价。创建子 Token 后，其模型范围、额度与路由仍须单独核实；列表可见不保证已定价或可调用。</p>
+      {!models ? <p role="status">当前权限模型列表未加载或加载失败，请刷新模型列表；暂不生成配置。</p> : options.length === 0 ? <p role="status">当前权限下没有兼容此客户端 / 协议的文本模型。请切换协议或联系管理员；不会使用其他权限的模型兜底。</p> : <label className="block">兼容模型
+        <select aria-label="兼容模型" className={selectClass} value={config?.model ?? ""} onChange={(event) => setSelected(event.target.value)}>
+          {options.map((model) => <option key={model.id} value={model.id}>{model.label} · {model.id}</option>)}
+        </select>
+      </label>}
+      {client === "dsh" && <p>DSH 还要求真实上下文与输出上限等完整能力；完整跳过原因与警告请展开下方 DSH 配置查看。</p>}
+    </fieldset>
+    <fieldset className="space-y-2">
+      <legend className="font-medium">3 · 复制占位密钥配置</legend>
+      <p>请先创建最小权限的子 Token（仅创建时显示一次）。本页不读取真实 Token；不要分享主 Token，不要把密钥放进公开链接。</p>
+      {onOpenKeys ? <button type="button" onClick={onOpenKeys} className="text-blue-600 hover:underline">创建子 Token →</button> : <p>前往账户中的 Token 管理创建子 Token，再返回继续配置。</p>}
+      {config && <>
+        <p>以下是字段对照清单，不是通用一键导入文件。将 <Mono>$CPG_API_KEY</Mono> 替换为本地保存的子 Token，或在支持环境变量的 SDK 中读取它；普通客户端不会自动展开占位符。</p>
+        <CodeBlock code={JSON.stringify(config, null, 2)} lang="客户端字段清单 · 占位密钥" />
+        <p>Base URL 取自部署方的网关地址（本地开发默认 http://127.0.0.1:8787）；OpenAI SDK 使用带 /v1 的地址，Anthropic SDK 使用域名根地址，完整 endpoint 仅供核对，不要重复拼接 /v1。</p>
+        {client === "dsh" && <p>DSH 请使用下方“生成 DSH 配置 JSON”，并在本地环境变量 CPG_API_KEY 中配置子 Token；字段清单不能代替 DSH profile。</p>}
+      </>}
+    </fieldset>
+  </SectionCard>;
+}
+
 export function ConsoleGuide({
   models,
   onOpenModels,
+  onOpenKeys,
 }: {
   models: ConsoleModels | null | undefined;
   onOpenModels?: () => void;
+  onOpenKeys?: () => void;
 }) {
   const items: ModelItem[] = models?.items ?? [];
-  const demoModel = items.find(isTextModel)?.model_name || "your-chat-model";
+  const demoModel = connectionModels(items, "openai", "/v1/chat/completions")[0]?.id || "your-chat-model";
   const embeddingModel = items.find(isEmbeddingModel)?.model_name;
   const embeddingBody = useMemo(() => embeddingModel
     ? JSON.stringify({ model: embeddingModel, input: ["你好", "语义搜索"], encoding_format: "float", user: "example-user" }, null, 2)
@@ -174,6 +271,7 @@ export function ConsoleGuide({
 
   return (
     <div className="space-y-4">
+      <ConsoleConnectionWizard models={models} onOpenKeys={onOpenKeys} />
       <SectionCard title="接入信息">
         <div className="flex items-center justify-between gap-2 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-800/40 px-3 py-2">
           <div className="min-w-0">
@@ -208,7 +306,7 @@ export function ConsoleGuide({
       </SectionCard>
 
       <SectionCard title="快速开始">
-        <p>三种语言任选，把示例中的模型名换成「模型广场」里你可用的模型即可直接运行：</p>
+        <p>以下保留 OpenAI Chat Completions 示例；请使用上方向导确认当前权限与协议兼容的模型，核对价格后再自行运行（会产生实际调用）：</p>
         <CodeBlock code={chatCode} lang="curl" />
         <CodeBlock code={pythonCode} lang="Python · openai" />
         <CodeBlock code={tsCode} lang="TypeScript · openai" />
@@ -230,8 +328,8 @@ export function ConsoleGuide({
         <p>创建时使用当前模型公开声明的参数和返回的素材 ID；图片及视频数量、组合方式仍受模型配置限制。提交必须携带 <Mono>Idempotency-Key</Mono>，未知结果沿用原 key 与请求参数，不自动重发付费任务。仅在返回可用的本网关内容接口时允许播放/下载，不暴露上游地址。</p>
       </SectionCard>
 
-      <SectionCard title="secure_skill 与 Doubao · 独立能力规则">
-        <p>secure_skill 标准视频保留协议规则：尾帧必须有首帧，首尾帧不能混用参考图、视频或音频；按秒报价。不要套用 Doubao 的素材上限或组合规则。</p>
+      <SectionCard title="Minimax 与 Doubao · 独立能力规则">
+        <p>Minimax 标准视频保留原有规则：尾帧必须有首帧，首尾帧不能混用参考图、视频或音频；按秒报价。不要套用 Doubao 的素材上限或组合规则。</p>
         <p>Doubao 模型由公开 video.request_format=doubao_content 标识。创建可使用 model、prompt、duration、ratio、resolution 和 reference_image_ids / reference_video_ids、first_frame_id / last_frame_id、image_urls / video_urls / audio_urls 简写，或官方 content 数组；不要混用 content 与简写。默认时长与比例取模型公开 default_duration / default_ratio，所有规格、素材数量及 max_total_refs 均以所选分组声明为准，不能按模型名称猜测。</p>
         <p>Doubao 在分组允许首尾帧时可仅传尾帧、可帧+音频；不能把帧与普通参考图或视频混用。私有上传服务仍独立限制最多 9 张图 / 3 个视频，不代表外部 URL 或模型能力上限。音频单独参考需分组显式开启。</p>
         <p>Doubao 报价逐项区分 ¥/次和 ¥/秒；首版默认未配置安全下载。任务 completed 且 content_available=false 或结果 URL 为空时，显示“生成完成，下载未配置，请联系管理员获取帮助”，不能当失败重新提交或重复付费，不展示播放按钮或上游链接。</p>

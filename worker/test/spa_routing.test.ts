@@ -4,7 +4,7 @@ import type { Env } from "../src/types";
 import { initializedSchemaDouble } from "./helpers/initializedSchemaDouble";
 
 describe("SPA Routing & Browser Refresh Protection", () => {
-  it("serves static assets when browser refreshes on /models with text/html accept header", async () => {
+  it("returns 404 without accessing assets for the retired /models HTML page", async () => {
     let assetsFetched = false;
     const mockAssets = {
       fetch: async (req: Request) => {
@@ -38,11 +38,10 @@ describe("SPA Routing & Browser Refresh Protection", () => {
 
     mockEnv.DB = initializedSchemaDouble(mockEnv.DB);
     const res = await app.fetch(req, mockEnv);
-    expect(res.status).toBe(200);
-    expect(assetsFetched).toBe(true);
-
-    const body = await res.text();
-    expect(body).toContain("React App");
+    expect(res.status).toBe(404);
+    expect(assetsFetched).toBe(false);
+    expect(res.headers.get("Content-Type")).toContain("application/json");
+    expect(await res.json()).toEqual({ error: "not_found" });
   });
 
   it("returns model list for API clients calling GET /models without bearer token and not requesting HTML", async () => {
@@ -131,7 +130,7 @@ describe("SPA Routing & Browser Refresh Protection", () => {
     expect(res.headers.get("Content-Type")).toContain("application/json");
   });
 
-  it("sends a bare-domain browser navigation to the personal page, not the console shell", async () => {
+  it("temporarily redirects a bare-domain browser navigation to the console", async () => {
     let assetsFetched = false;
     const mockEnv = {
       DB: {
@@ -156,7 +155,8 @@ describe("SPA Routing & Browser Refresh Protection", () => {
     mockEnv.DB = initializedSchemaDouble(mockEnv.DB);
     const res = await app.fetch(req, mockEnv);
     expect(res.status).toBe(302);
-    expect(res.headers.get("Location")).toBe("/me/");
+    expect(res.headers.get("Location")).toBe("/console");
+    expect(res.headers.get("Cache-Control")).toBe("no-store");
     expect(assetsFetched).toBe(false);
   });
 
