@@ -334,23 +334,23 @@ export default function ModelGroupsPage() {
   return (
     <div className="space-y-4">
       <Card
-        title="模型分组"
+        title="模型池"
         action={
           <Button size="sm" onClick={openCreate}>
             <IconPlus className="w-3.5 h-3.5" /> 新建分组
           </Button>
         }
       >
-        <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">
-          一个组是调用方在 <code>model</code> 字段里直接填的名字，与模型完全等价：同样的价格、同样的缓存、
-          同样的推理等级选项。组默认声明支持五档推理（low / medium / high / xhigh / max），成员不支持时静默退化：
-          能推理的成员收到它的次高档，不能推理的成员收不到 effort、由上游用自己的默认。只有在编辑弹窗的
-          <code>config_json</code> 里写 <code>{'{"supports_reasoning": false}'}</code> 才会关掉整组。
-          组内成员按下面的顺序依次尝试，失败（5xx / 429 / 网络错误）就换下一个，
-          4xx 直接透传——那是调用方自己的问题，换人只会重放错误并多烧一次钱。
-          在 config_json 里写 <code>{'{"member_retries": 2}'}</code>（0–3，默认 0）可让每个成员
-          在换下一个之前先对这类瞬时失败原地重试最多 2 次，适合时好时坏的上游。
+        <p className="text-sm text-slate-500 dark:text-slate-400 mb-1">
+          模型池把几个上游模型组成一个名字。用户调用这个名字时，按顺序尝试成员：上游出错（5xx、429、网络错误）就换下一个，用户自己的请求错误（4xx）直接返回。
         </p>
+        <details className="mb-4 text-xs text-slate-500 dark:text-slate-400">
+          <summary className="cursor-pointer">高级配置（config_json）</summary>
+          <ul className="mt-1 list-disc space-y-0.5 pl-5">
+            <li><code>{'{"member_retries": 2}'}</code>：每个成员先原地重试最多 2 次（0–3，默认 0）。</li>
+            <li><code>{'{"supports_reasoning": false}'}</code>：关闭整个池的推理等级。默认支持 low ~ max 五档，成员不支持时自动降档。</li>
+          </ul>
+        </details>
         <AdminListToolbar filters={filters} onChange={setFilter} onReset={resetFilters} total={groups.length} count={list.length} loading={loading || isRefreshing} error={queryError ? "读取失败：" + queryError.message + "；如有旧数据仍予保留" : null} onRefresh={() => { void refresh().catch(() => {}); }} searchPlaceholder="搜索组名 / 显示名…">
           <ModelCategoryFilter state={categories} value={categoryFilter} onChange={value => setFilter("category", value)} />
           <Select aria-label="计价模式" className="!w-auto" value={filters.pricing} onChange={e => setFilter("pricing", e.target.value)}>
@@ -477,7 +477,7 @@ export default function ModelGroupsPage() {
           </div>
         )}
         <p className="mt-3 text-xs text-slate-400">
-          组名与模型名共用一套命名空间：任何一个名字被模型占用了，就不能再拿来当组名，反之亦然。两者会进同一个缓存前缀，撞名只会串答案。
+          模型池的名字不能和模型重名。
         </p>
       </Card>
 

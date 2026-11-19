@@ -199,14 +199,14 @@ describe("monthly-pass UI SSR (not browser interaction or E2E)", () => {
   it("renders admin CRUD form fields, disabled plans, retained missing groups and account list", () => {
     const plan = { ...input(), id: "p1", enabled: 0, service_group_ids: ["missing"] };
     const form = render(MonthlyPassPlanForm, { plan, groups: [{ id: "g1", name: "蓝组" }], onSaved: vi.fn() });
-    for (const label of ["套餐名称", "每日限额（¥，与网关计费币种一致）", "每周限额（¥，与网关计费币种一致）", "5 小时限额（¥，与网关计费币种一致）", "总额限额（¥，与网关计费币种一致）", "保存完整套餐", "不提供删除", "已失效，保留原值", "此处不授予账户路由权限"]) expect(form.text).toContain(label);
+    for (const label of ["套餐名称", "每日限额（¥）", "每周限额（¥）", "5 小时限额（¥）", "总额限额（¥）", "保存完整套餐", "套餐不能删除", "已失效，保留原值"]) expect(form.text).toContain(label);
     expect(form.html).toContain('value="文本月卡"');
     expect(form.html).toMatch(/type="checkbox" checked=""/);
     const list = render(AccountList, { accounts: [account()], devices: [{ id: "device-1", name: "研发账户" }], onSelect: vi.fn() });
     expect(list.text).toContain("研发账户"); expect(list.text).toContain("额度不足");
     fixture.data.set("admin:monthly-passes", { plans: [plan], accounts: [account()], devices: [{ id: "device-1", name: "研发账户" }], groups: [] });
     const admin = render(MonthlyPassesPage);
-    expect(admin.text).toContain("月卡管理"); expect(admin.text).toContain("编辑 / 停用"); expect(admin.text).toContain("选择账户 / 设备");
+    expect(admin.text).toContain("月卡怎么计费"); expect(admin.text).toContain("编辑 / 停用"); expect(admin.text).toContain("选择账户 / 设备");
     expect(fetchMock).not.toHaveBeenCalled();
   });
 });

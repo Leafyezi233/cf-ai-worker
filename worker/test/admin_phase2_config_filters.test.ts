@@ -11,9 +11,9 @@ vi.mock("../../web/src/api/client", () => ({ api: { get: f.get, put: f.put, post
 vi.mock("../../web/src/components/Toast", () => ({ useToast: () => ({ success: f.toast, error: f.toast }) }));
 vi.mock("../../web/src/hooks/useQuery", () => ({
   useQuery: (key: string, _fetch: unknown, options?: any) => ({
-    data: options?.enabled === false ? undefined : key.startsWith("devices-list") || key === "device-templates-devices" ? f.devices : key === "device-templates" ? f.templates : key === "peak-pricing-models" ? f.pricing : key.startsWith("peak-pricing:") ? f.windows : [],
+    data: options?.enabled === false ? undefined : key?.startsWith("devices-list") || key === "device-templates-devices" ? f.devices : key === "device-templates" ? f.templates : key === "peak-pricing-models" ? f.pricing : key?.startsWith("peak-pricing:") ? f.windows : [],
     loading: false, isRefreshing: f.refreshing, error: f.error,
-    refresh: key.startsWith("peak-pricing:") ? f.refreshWindows : f.refresh,
+    refresh: key?.startsWith("peak-pricing:") ? f.refreshWindows : f.refresh,
   }),
   invalidateCache: vi.fn(),
 }));
@@ -106,10 +106,10 @@ describe("phase2 device list filters", () => {
     expect(text(rows(harness(Page).render())[0])).toContain("alpha"); expect(JSON.stringify([f.devices, f.templates, f.pricing])).toBe(before);
   });
   it("distinguishes errors, zero records and no matches, retaining stale data during refresh", () => {
-    f.location.search = "?list_q=no-match"; let tree = harness(DevicesPage).render(); expect(nodes(tree).some(n => n.props?.text === "没有符合筛选条件的设备")).toBe(true);
+    f.location.search = "?list_q=no-match"; let tree = harness(DevicesPage).render(); expect(nodes(tree).some(n => n.props?.text === "没有符合筛选条件的账户")).toBe(true);
     f.location.search = ""; f.error = new Error("offline"); f.refreshing = true; tree = harness(DevicesPage).render(); expect(rows(tree)).toHaveLength(3); expect(toolbar(tree).error).toBe("offline"); expect(toolbar(tree).loading).toBe(true);
-    f.devices = []; tree = harness(DevicesPage).render(); expect(nodes(tree).some(n => n.props?.text === "设备列表加载失败，请重试")).toBe(true);
-    f.error = null; tree = harness(DevicesPage).render(); expect(nodes(tree).some(n => n.props?.text === "尚未签发任何设备 Token")).toBe(true);
+    f.devices = []; tree = harness(DevicesPage).render(); expect(nodes(tree).some(n => n.props?.text === "账户列表加载失败，请重试")).toBe(true);
+    f.error = null; tree = harness(DevicesPage).render(); expect(nodes(tree).some(n => n.props?.text === "还没有账户，点「新建账户」开始")).toBe(true);
   });
   it("filter changes/reset only navigate; manual refresh is explicit", () => {
     const h = harness(DevicesPage); let tree = h.render(); toolbar(tree).onChange("q", "zulu"); tree = h.render(); toolbar(tree).onReset();

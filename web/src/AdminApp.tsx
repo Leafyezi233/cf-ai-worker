@@ -20,6 +20,7 @@ const ModelGroupsPage = lazy(() => import("./pages/ModelGroupsPage"));
 const ServiceGroupsPage = lazy(() => import("./pages/ServiceGroupsPage"));
 const DeviceTemplatesPage = lazy(() => import("./pages/DeviceTemplatesPage"));
 const MonthlyPassesPage = lazy(() => import("./pages/MonthlyPassesPage"));
+const VideoTasksPage = lazy(() => import("./pages/VideoTasksPage"));
 
 function PageLoader() {
   return (
@@ -46,9 +47,6 @@ export default function App() {
               <Route path="/login" element={<LoginPage />} />
               <Route path="/" element={<Navigate to="/dashboard" replace />} />
               <Route element={<Protected />}>
-                { 
-
-}
                 <Route path="/dashboard" element={<DashboardPage />} />
                 <Route path="/providers" element={<ProvidersPage />} />
                 <Route path="/models" element={<ModelsPage />} />
@@ -60,6 +58,8 @@ export default function App() {
                 <Route path="/device-templates" element={<DeviceTemplatesPage />} />
                 <Route path="/monthly-passes" element={<MonthlyPassesPage />} />
                 <Route path="/usage" element={<UsagePage />} />
+                <Route path="/video-tasks" element={<VideoTasksPage />} />
+                <Route path="/audit" element={<SettingsPage view="audit" />} />
                 <Route path="/settings" element={<SettingsPage />} />
               </Route>
               <Route path="*" element={<Navigate to="/" replace />} />

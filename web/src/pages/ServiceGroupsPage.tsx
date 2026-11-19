@@ -169,7 +169,7 @@ export default function ServiceGroupsPage() {
   const chosenGroup = groups.find(g => g.id === selected);
   const categoryMappingId = (m: Mapping) => chosenGroup?.models?.find(saved => saved.model_key === m.model_key && (!m.id || saved.id === m.id))?.id;
   return <div className="space-y-5">
-    <div className="flex items-start justify-between gap-3"><div><h1 className="text-xl font-semibold">服务分组</h1><p className="mt-1 text-sm text-slate-500">为不同账户配置模型路由、价格倍率与私有授权。各区域分别保存。</p></div><Button variant="secondary" disabled={busy || loading} onClick={() => void load(true)}>刷新列表</Button></div>
+    <div className="flex items-start justify-between gap-3"><div><h1 className="text-xl font-semibold">服务分组</h1><p className="mt-1 text-sm text-slate-500">服务分组决定用户能看到哪些模型、按什么价格调用。公开分组所有账户可选；私有分组要给账户授权。</p></div><Button variant="secondary" disabled={busy || loading} onClick={() => void load(true)}>刷新列表</Button></div>
     {error && <div role="alert" className="rounded-lg bg-red-50 dark:bg-red-950/30 p-3 text-sm text-red-600">{error}</div>}
     <AdminListToolbar filters={filters} onChange={setFilter} onReset={resetFilters} total={groups.length} count={filteredGroups.length} loading={loading} error={loadError ? "读取失败：" + loadError + "；如有旧数据仍予保留" : null} searchPlaceholder="搜索服务分组 / 公开模型名 / 目标 ID">
       <Select aria-label="公开范围" className="!w-auto" value={filters.public} onChange={e => setFilter("public", e.target.value)}><option value="">公开与私有</option><option value="1">公开</option><option value="0">私有</option></Select>
@@ -237,6 +237,8 @@ export default function ServiceGroupsPage() {
         </> : <p className="text-sm text-slate-500">先创建分组，再配置模型映射和账户授权。</p>}
       </div>
     </div>
+    <details className="rounded-xl border border-slate-200 dark:border-slate-800 p-3"><summary className="cursor-pointer text-sm font-medium text-slate-600 dark:text-slate-300">高级：合并两个模型池的成员</summary><div className="mt-3">
     <ModelGroupMergePanel groups={modelGroups} onChanged={async () => { const updated=await load(); const current=updated?.find(g=>g.id===selected); if(current)open(current); }} />
+    </div></details>
   </div>;
 }

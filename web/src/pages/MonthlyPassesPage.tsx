@@ -50,14 +50,14 @@ export function MonthlyPassPlanForm({ plan, groups, onSaved }: {
     <fieldset disabled={busy} className="space-y-4">
       <label className="block space-y-1 text-xs"><span>套餐名称</span><Input required maxLength={100} value={name} onChange={event => setName(event.target.value)} /></label>
       <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={enabled} onChange={event => setEnabled(event.target.checked)} />启用套餐</label>
-      <div className="grid gap-3 sm:grid-cols-2">{monthlyLimitFields.map(([key, label]) => <label key={key} className="block space-y-1 text-xs"><span>{label}限额（¥，与网关计费币种一致）</span><Input type="number" step="any" max={1e9} value={limits[key]} placeholder="留空表示不限额" onChange={event => setLimits(previous => ({ ...previous, [key]: event.target.value }))} /></label>)}</div>
-      <p className="text-xs text-slate-500">至少一项正限额；金额必须有限、大于 0 且不超过 1e9。空白发送 null，不会发送 0。</p>
+      <div className="grid gap-3 sm:grid-cols-2">{monthlyLimitFields.map(([key, label]) => <label key={key} className="block space-y-1 text-xs"><span>{label}限额（¥）</span><Input type="number" step="any" max={1e9} value={limits[key]} placeholder="留空表示不限额" onChange={event => setLimits(previous => ({ ...previous, [key]: event.target.value }))} /></label>)}</div>
+      <p className="text-xs text-slate-500">至少填一项限额；空着表示这一项不限制。</p>
       <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={restricted} onChange={event => setRestricted(event.target.checked)} />限制月卡可计费服务分组</label>
-      <p className="text-xs text-slate-500">不勾选发送 null；勾选但不选择发送 []（无分组可用）。最多 100 个。此处不授予账户路由权限。</p>
+      <p className="text-xs text-slate-500">不勾选：所有服务分组的文本请求都可以用月卡。</p>
       {restricted && <div aria-label="月卡服务分组" className="max-h-48 space-y-2 overflow-y-auto rounded-lg border border-slate-200 p-3 dark:border-slate-700">{choices.length ? choices.map(group => <label key={group.id} className="flex items-center gap-2 text-sm"><input type="checkbox" checked={groupIds.includes(group.id)} disabled={!groupIds.includes(group.id) && groupIds.length >= 100} onChange={event => setGroupIds(previous => event.target.checked ? [...previous, group.id] : previous.filter(id => id !== group.id))} />{group.name}{group.enabled === 0 || group.enabled === false ? "（停用）" : ""}</label>) : <p className="text-xs text-slate-500">暂无服务分组</p>}</div>}
       {error && <p role="alert" className="text-sm text-rose-600">{error}</p>}
       <Button type="submit" disabled={busy}>{busy ? "保存中…" : plan ? "保存完整套餐" : "创建套餐"}</Button>
-      <p className="text-xs text-slate-500">不提供删除；可取消启用后保存以停用套餐。</p>
+      <p className="text-xs text-slate-500">套餐不能删除；不用了就取消「启用」再保存。</p>
     </fieldset>
   </form>;
 }
@@ -182,14 +182,13 @@ export default function MonthlyPassesPage() {
   const accountPlanChoices = new Map((state?.plans ?? []).map(item => [item.id, item.name]));
   for (const account of state?.accounts ?? []) if (account.subscription && !accountPlanChoices.has(account.subscription.plan_id)) accountPlanChoices.set(account.subscription.plan_id, account.subscription.plan_name);
   return <div className="space-y-5">
-    <div className="flex items-center justify-between gap-2"><h1 className="text-xl font-semibold">月卡管理</h1><Button type="button" variant="secondary" disabled={query.loading || query.isRefreshing} onClick={() => { void query.refresh().catch(() => {}); }}>刷新</Button></div>
-    <Card title="计费与有效期规则"><MonthlyPassRules /></Card>
+    <div className="flex items-center justify-between gap-2"><h1 className="text-xl font-semibold">月卡</h1><Button type="button" variant="secondary" disabled={query.loading || query.isRefreshing} onClick={() => { void query.refresh().catch(() => {}); }}>刷新</Button></div>
+    <details className="rounded-xl border border-slate-200 bg-white p-3 text-sm dark:border-slate-800 dark:bg-slate-900"><summary className="cursor-pointer font-medium">月卡怎么计费</summary><div className="mt-2"><MonthlyPassRules /></div></details>
     {query.error && <p role="alert" className="text-sm text-rose-600">加载失败：{query.error.message}</p>}
     {query.loading && !state ? <Spinner text="正在加载月卡管理…" /> : state && <>
       <div className="grid gap-5 lg:grid-cols-2">
         <Card title="套餐列表（无删除，仅停用）" action={<Button type="button" size="sm" disabled={query.isRefreshing} onClick={() => { setSelectedPlan(null); setFormRevision(previous => previous + 1); }}>新建套餐</Button>}>
           <AdminListToolbar filters={filters} onChange={setFilter} onReset={resetFilters} total={state.plans.length} count={visiblePlans.length} searchPlaceholder="套餐名称 / ID" />
-          <p className="my-2 text-xs text-slate-500">全部套餐的本地筛选；筛选不会切换或清空右侧编辑草稿。</p>
           {!state.plans.length ? <Empty text="暂无套餐，请创建至少一个启用套餐。" /> : !visiblePlans.length ? <Empty text="没有匹配套餐，请调整或清空筛选。" /> : <ul className="space-y-3">{visiblePlans.map(item => <li key={item.id} className="space-y-2 rounded-lg border border-slate-200 p-3 dark:border-slate-800"><div className="flex items-center justify-between gap-2"><span className="font-medium text-sm">{item.name}</span><Badge tone={item.enabled ? "green" : "slate"}>{item.enabled ? "启用" : "停用"}</Badge></div><p className="text-xs text-slate-500">{monthlyLimitFields.map(([key, label]) => label + " " + monthlyPassMoney(item.limits[key])).join(" · ")}</p><Button type="button" size="sm" variant="secondary" disabled={query.isRefreshing} onClick={() => { setSelectedPlan(item.id); setFormRevision(previous => previous + 1); }}>编辑 / 停用</Button></li>)}</ul>}
         </Card>
         <Card title={plan ? "编辑套餐：" + plan.name : "新建套餐"}><fieldset disabled={!!query.error || query.isRefreshing}><MonthlyPassPlanForm key={(selectedPlan ?? "new") + ":" + formRevision} plan={plan} groups={state.groups} onSaved={async () => { await query.refresh(); }} /></fieldset></Card>
@@ -206,7 +205,7 @@ export default function MonthlyPassesPage() {
           <Select aria-label="到期范围" className="!w-auto" value={filters.expiry} onChange={event => setFilter("expiry", event.target.value)}><option value="">全部到期范围</option><option value="7d">未来 7 天内到期</option><option value="30d">未来 30 天内到期</option><option value="expired">已到期</option><option value="none">无月卡</option></Select>
           <Select aria-label="到期排序" className="!w-auto" value={filters.expiry_sort} onChange={event => { setFilter("expiry_sort", event.target.value); setFilter("account_sort", ""); }}><option value="">不按到期排序</option><option value="asc">到期时间升序</option><option value="desc">到期时间降序</option></Select>
         </AdminListToolbar>
-        <p className="my-2 text-xs text-slate-500">全部月卡账户记录的本地筛选（不含尚无月卡记录的设备）；启用状态指月卡权益，不是设备状态。到期范围按当前时间计算，不自动轮询；额度状态来自上次读取。清空筛选重置两张列表，不影响账户选择或编辑草稿。</p>
+        <p className="my-2 text-xs text-slate-500">只列出开通过月卡的账户。</p>
         {!visibleAccounts.length && state.accounts.length ? <Empty text="没有匹配账户，请调整或清空筛选。" /> : <AccountList accounts={visibleAccounts} devices={devices} onSelect={setDeviceId} />}
       </Card>
     </>}

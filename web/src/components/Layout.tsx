@@ -23,36 +23,41 @@ import {
 
 const navSections: { title: string; items: { to: string; label: string; icon: typeof IconDashboard }[] }[] = [
   {
-    title: "概览",
+    title: "总览",
     items: [
       { to: "/dashboard", label: "仪表盘", icon: IconDashboard },
-      { to: "/usage", label: "用量记录", icon: IconUsage },
+      { to: "/usage", label: "用量与账单", icon: IconUsage },
     ],
   },
   {
-    title: "网关配置",
+    title: "用户",
     items: [
-      { to: "/providers", label: "Providers", icon: IconProviders },
-      { to: "/models", label: "Models", icon: IconModels },
-      { to: "/model-groups", label: "模型分组", icon: IconDatabase },
+      { to: "/devices", label: "用户账户", icon: IconDevices },
+      { to: "/monthly-passes", label: "月卡", icon: IconFileText },
+      { to: "/device-templates", label: "账户模板", icon: IconFileText },
+    ],
+  },
+  {
+    title: "模型与价格",
+    items: [
+      { to: "/providers", label: "上游接口", icon: IconProviders },
+      { to: "/models", label: "模型", icon: IconModels },
+      { to: "/model-groups", label: "模型池", icon: IconDatabase },
       { to: "/service-groups", label: "服务分组", icon: IconDatabase },
       { to: "/peak-pricing", label: "峰谷定价", icon: IconZap },
+      { to: "/playground", label: "在线测试", icon: IconPlayground },
     ],
   },
   {
-    title: "设备",
+    title: "运营",
     items: [
-      { to: "/devices", label: "设备 Token", icon: IconDevices },
-      { to: "/device-templates", label: "设备模板", icon: IconFileText },
-      { to: "/monthly-passes", label: "月卡管理", icon: IconFileText },
+      { to: "/video-tasks", label: "视频任务", icon: IconFileText },
+      { to: "/audit", label: "审计日志", icon: IconFileText },
     ],
   },
   {
-    title: "其他",
-    items: [
-      { to: "/playground", label: "Playground", icon: IconPlayground },
-      { to: "/settings", label: "系统设置", icon: IconSettings },
-    ],
+    title: "系统",
+    items: [{ to: "/settings", label: "系统设置", icon: IconSettings }],
   },
 ];
 
@@ -149,7 +154,7 @@ export default function Layout() {
             </div>
             <div>
               <div className="font-bold text-slate-900 dark:text-slate-100 leading-tight text-sm tracking-tight">AI Gateway</div>
-              <div className="text-[11px] text-slate-400 dark:text-slate-500 font-medium">Personal Cloudflare API</div>
+              <div className="text-[11px] text-slate-400 dark:text-slate-500 font-medium">管理后台</div>
             </div>
           </div>
 
@@ -166,7 +171,7 @@ export default function Layout() {
                   isHealthy ? "bg-emerald-500 animate-pulse" : "bg-rose-500"
                 }`}
               />
-              {isHealthy ? "Gateway 在线" : "Gateway 异常"}
+              {isHealthy ? "网关在线" : "网关无响应"}
             </span>
             <span className="text-[10px] text-slate-400 dark:text-slate-500">v1.0</span>
           </div>
@@ -190,7 +195,7 @@ export default function Layout() {
                   </div>
                   <div>
                     <div className="font-bold text-slate-900 dark:text-slate-100 leading-tight text-sm tracking-tight">AI Gateway</div>
-                    <div className="text-[10px] text-slate-400 dark:text-slate-500 font-medium">Personal Cloudflare API</div>
+                    <div className="text-[10px] text-slate-400 dark:text-slate-500 font-medium">管理后台</div>
                   </div>
                 </div>
                 <button
@@ -216,7 +221,7 @@ export default function Layout() {
                       isHealthy ? "bg-emerald-500 animate-pulse" : "bg-rose-500"
                     }`}
                   />
-                  {isHealthy ? "Gateway 在线" : "Gateway 异常"}
+                  {isHealthy ? "网关在线" : "网关无响应"}
                 </span>
                 <span className="text-[10px] text-slate-400 dark:text-slate-500">v1.0</span>
               </div>

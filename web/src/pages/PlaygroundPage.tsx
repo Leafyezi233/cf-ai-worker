@@ -317,7 +317,7 @@ export default function PlaygroundPage() {
         <div>
           <h2 className="text-lg sm:text-xl font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
             <IconPlayground className="text-blue-600 dark:text-blue-400" />
-            API Playground (在线调试与对话工作台)
+            在线测试
           </h2>
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
             在管理后台直接测试各模型连通性、输出质量与延迟，无需配置客户端 Token

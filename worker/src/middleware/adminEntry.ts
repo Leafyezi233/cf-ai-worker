@@ -6,7 +6,7 @@ import { ipRateLimit } from "./ipRateLimit";
 import { ensureSchema } from "../db/schema";
 
 import { adminPrefix } from "../utils/admin-path";
-const PAGES = new Set(["", "login", "dashboard", "providers", "models", "model-groups", "service-groups", "peak-pricing", "playground", "devices", "device-templates", "monthly-passes", "usage", "settings"]);
+const PAGES = new Set(["", "login", "dashboard", "providers", "models", "model-groups", "service-groups", "peak-pricing", "playground", "devices", "device-templates", "monthly-passes", "usage", "settings", "video-tasks", "audit"]);
 const LEGACY = new Set([...PAGES].filter(Boolean));
 
 type Chunk = { file: string; imports?: string[]; css?: string[]; assets?: string[]; isEntry?: boolean };

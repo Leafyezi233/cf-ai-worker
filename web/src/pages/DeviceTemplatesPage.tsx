@@ -324,9 +324,9 @@ export default function DeviceTemplatesPage() {
     <div className="space-y-4 sm:space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
         <div>
-          <h2 className="text-lg sm:text-xl font-bold text-slate-900 dark:text-slate-100 tracking-tight">设备模板</h2>
+          <h2 className="text-lg sm:text-xl font-bold text-slate-900 dark:text-slate-100 tracking-tight">账户模板</h2>
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-            把一份白名单存成模板，一次套用到多台设备。模板只管「能调哪些模型」，不改设备的限速与月限额。
+            把一份「能调用哪些模型」的名单存成模板，一次套用到多个账户。不会改账户的余额和限额。
           </p>
         </div>
         <div className="flex gap-2 w-full sm:w-auto">

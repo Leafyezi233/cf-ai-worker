@@ -10,6 +10,7 @@ import { useTheme } from "../hooks/useTheme";
 import { Link } from "react-router-dom";
 import { useAdminFilters } from "../hooks/useAdminFilters";
 import { Select } from "../components/ui";
+import { AttentionPanel } from "../components/AttentionPanel";
 
 interface DashboardData {
   stats: Record<string, StatsResponse>;
@@ -100,14 +101,15 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-4 sm:space-y-6">
+      <AttentionPanel />
       <div className="flex flex-wrap items-center gap-2">
         <Select aria-label="仪表盘统计范围" className="!w-auto" value={range} onChange={e => setFilter("range", e.target.value)}><option value="today">今日</option><option value="7d">近7日</option><option value="30d">近30日</option></Select>
         <Button disabled={loading || isRefreshing} onClick={() => void refresh(true).catch(() => {})}>{isRefreshing ? "刷新中…" : "刷新统计"}</Button>
         <Link className="text-sm text-blue-600" to={`/usage?list_range=${range}`}>查看对应范围用量</Link>
-        <span className="text-xs text-slate-500">{rangeLabel}统计 · 浏览器时区 {Intl.DateTimeFormat().resolvedOptions().timeZone} · {updatedAt ? `更新于 ${fmtTime(updatedAt)}` : "尚未成功更新"}；趋势固定近7日，最近日志为全站最新8条</span>
+        <span className="text-xs text-slate-500">{updatedAt ? `更新于 ${fmtTime(updatedAt)}` : "尚未更新"}</span>
       </div>
-      {error ? <p role="alert" className="text-sm text-red-600">统计读取失败：{error.message}。{data ? "保留上次成功数据，并非当前实时结果。" : "尚无成功数据，以下零值不代表实际用量。"}</p> : null}
-      {data?.failedSections.length ? <p role="alert" className="text-sm text-amber-600">部分区域读取失败：{data.failedSections.join("、")}；对应空值不表示实际为零，请重试。</p> : null}
+      {error ? <p role="alert" className="text-sm text-red-600">统计读取失败：{error.message}。{data ? "下面是上次读到的数据。" : ""}</p> : null}
+      {data?.failedSections.length ? <p role="alert" className="text-sm text-amber-600">部分区域读取失败：{data.failedSections.join("、")}，请刷新重试。</p> : null}
       { }
       <div className="p-3.5 sm:p-4 rounded-2xl bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 text-white shadow-lg shadow-blue-500/15 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4">
         <div className="flex items-center gap-3 min-w-0">
@@ -178,7 +180,7 @@ export default function DashboardPage() {
                   响应缓存加速与成本节约
                 </h3>
                 <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                  基于 Cloudflare 边缘缓存，消除重复提示词与测试请求的上游开销
+                  重复的请求直接返回缓存结果，不再调用上游
                 </p>
               </div>
             </div>

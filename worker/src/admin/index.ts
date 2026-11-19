@@ -19,6 +19,7 @@ import { deviceTemplatesApp } from "./device-templates";
 import { videoTasksApp } from "./video-tasks";
 import { monthlyPassesApp } from "./monthly-passes";
 import { usageRetentionApp } from "./usage-retention";
+import { attentionApp } from "./attention";
 
 export const adminApp = new Hono<{ Bindings: Env }>();
 adminApp.onError(handleHttpError);
@@ -29,6 +30,7 @@ adminApp.route("/auth", authApp);
 
 adminApp.use("*", adminAuth);
 
+adminApp.route("/attention", attentionApp);
 adminApp.route("/monthly-passes", monthlyPassesApp);
 adminApp.route("/usage-retention", usageRetentionApp);
 adminApp.route("/video-tasks", videoTasksApp);

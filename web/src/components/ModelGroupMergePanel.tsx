@@ -87,7 +87,7 @@ export function ModelGroupMergePanel({ groups, onChanged }: ModelGroupMergePanel
   return <Card>
     <section className="space-y-4" aria-label="模型组内部池合并向导">
       <div><h2 className="text-lg font-semibold">内部成员池合并向导</h2>
-        <p className="text-sm text-gray-500">不合并公开身份、报价或账户授权，不自动选最低价，不删除源组。存在无法安全解释的引用时只提供阻止原因。</p></div>
+        <p className="text-sm text-gray-500">把源模型池的成员并入目标模型池。报价和授权不变，源模型池会保留。</p></div>
       <fieldset disabled={!!busy} className="grid gap-3 md:grid-cols-3">
         <label className="space-y-1"><span>1. 源组</span><select className="w-full rounded border bg-transparent p-2" value={source} onChange={event => setSource(event.target.value)}>
           <option value="">请选择源组</option>{groups.map(group => <option key={group.id} value={group.id}>{group.name}</option>)}</select></label>

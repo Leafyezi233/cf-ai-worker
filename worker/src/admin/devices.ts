@@ -30,6 +30,7 @@ import {
   TopupSchema,
   zValidator,
 } from "./schemas";
+import { deviceAccessReport } from "./device_access";
 
 export const devicesApp = new Hono<{ Bindings: Env }>();
 
@@ -295,6 +296,12 @@ devicesApp.post("/:id/topup", zValidator("json", TopupSchema), async (c) => {
       available_usd: Number((wallet.balance_usd - wallet.reserved_usd).toFixed(4)),
     },
   });
+});
+
+devicesApp.get("/:id/access", async (c) => {
+  const report = await deviceAccessReport(c.env, c.req.param("id"));
+  if (!report) return c.json({ error: "not_found" }, 404);
+  return c.json(report);
 });
 
 devicesApp.get("/:id/ledger", async (c) => {

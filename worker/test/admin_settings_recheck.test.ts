@@ -17,7 +17,7 @@ const clientPath = "../../web/src/api/client";
 const { default: SettingsPage } = await import(pagePath);
 const { api } = await import(clientPath);
 
-function harness() {
+function harness(props?: any) {
   const slots: any[] = []; let index = 0; let effects: (() => void)[] = [];
   const same = (a: any[], b: any[]) => a && b && a.length === b.length && a.every((v, i) => Object.is(v, b[i]));
   const dispatcher = {
@@ -35,7 +35,7 @@ function harness() {
     index = 0; effects = [];
     const internal = React.__SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED.ReactCurrentDispatcher;
     const previous = internal.current; internal.current = dispatcher;
-    let tree; try { tree = SettingsPage(); } finally { internal.current = previous; }
+    let tree; try { tree = SettingsPage(props); } finally { internal.current = previous; }
     effects.forEach(fn => fn()); return tree;
   }, unmount() { slots.forEach(slot => slot?.cleanup?.()); } };
 }
@@ -79,7 +79,7 @@ beforeEach(() => {
   vi.stubGlobal("window", { location: { origin: "https://gateway.test", pathname: "/admin/settings" }, URL: { createObjectURL: vi.fn(() => "blob:csv"), revokeObjectURL: vi.fn() } });
 });
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
-async function mounted() { const h = harness(); h.render(); await flush(); h.render(); return h; }
+async function mounted(props?: any) { const h = harness(props); h.render(); await flush(); h.render(); return h; }
 function serverValue(c: typeof configs[number], value: any) { f.data[c.key] = { ...f.data[c.key], [c.property]: value }; }
 function edit(h: ReturnType<typeof harness>, c: typeof configs[number], value: any) {
   const input = field(h.render(), c.id); expect(input.disabled).not.toBe(true);
@@ -117,6 +117,7 @@ describe("settings draft recheck with real React dispatcher", () => {
   });
   it("protects IP whitelist edits from a pending initial GET and PUT response", async () => {
     const initial = deferred(); vi.mocked(api.get).mockImplementation(async (path: string) => path.endsWith("ip-whitelist") ? initial.promise : { items: [] });
+    (globalThis as any).window.location.search = "?tab=security";
     const h = harness(); h.render(); checkbox(h.render()).onChange({ target: { checked: true } });
     initial.resolve({ enabled: false, allowed_ips: [], client_ip: "127.0.0.1" }); await flush();
     expect(checkbox(h.render()).checked).toBe(true);
@@ -145,14 +146,14 @@ describe("audit export metadata and incomplete-result feedback", () => {
       expect((globalThis as any).window.URL.revokeObjectURL).toHaveBeenCalledWith("blob:csv");
     });
   it("reads real download response headers and warns instead of claiming complete success", async () => {
-    const h = await mounted(); downloadResponse("true", "1000");
+    const h = await mounted({ view: "audit" }); downloadResponse("true", "1000");
     await exportButton(h.render()).onClick();
     expect(f.error).toHaveBeenCalledWith("审计日志 CSV 仅导出前 1000 条，结果不完整；请缩小时间范围后重新导出。");
     expect(f.success).not.toHaveBeenCalled();
     expect(fetch).toHaveBeenCalledWith(expect.stringContaining("limit=1000"), expect.anything()); h.unmount();
   });
   it.each([{ truncated: false, limit: 1000 }, undefined])("keeps complete exports and legacy undefined-return mocks compatible: %s", async result => {
-    const h = await mounted(); vi.spyOn(api, "download").mockResolvedValue(result);
+    const h = await mounted({ view: "audit" }); vi.spyOn(api, "download").mockResolvedValue(result);
     await exportButton(h.render()).onClick(); expect(f.success).toHaveBeenCalledWith("审计日志 CSV 导出成功"); expect(f.error).not.toHaveBeenCalled(); h.unmount();
   });
 });

@@ -871,9 +871,9 @@ wire_specification = "openai"
     <div className="space-y-4 sm:space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
         <div>
-          <h2 className="text-lg sm:text-xl font-bold text-slate-900 dark:text-slate-100 tracking-tight">模型路由映射</h2>
+          <h2 className="text-lg sm:text-xl font-bold text-slate-900 dark:text-slate-100 tracking-tight">模型</h2>
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-            配置允许客户端调用的模型、上游 Provider 绑定以及自定义别名（Alias）
+            用户能调用的每个模型都在这里：绑定哪个上游、叫什么名字、怎么收费。没有定价的模型调用会失败。
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
@@ -1176,7 +1176,7 @@ wire_specification = "openai"
                         {m.pricing_mode === "free" ? (
                           <Badge tone="blue" title="免费：调用不扣费，余额为 0 也可用">免费</Badge>
                         ) : m.pricing_mode === "unset" || !m.pricing_mode ? (
-                          <Badge tone="amber" title="未配置计价：网关会以 model_pricing_missing 拒绝调用">未定价</Badge>
+                          <span className="inline-flex flex-col gap-0.5"><Badge tone="red">未定价</Badge>{m.enabled ? <span className="font-sans text-[11px] text-rose-600 dark:text-rose-400">定价后才能调用</span> : null}</span>
                         ) : rowModelType === "video" ? (
                           <span>{isDoubaoVideoDraft(m.config_json || "") ? "Doubao 独立规格报价 · ¥/次或¥/秒" : isSecureVideoDraft(m.config_json || "") ? "管理员规格报价 · ¥/秒" : <>¥{m.price_per_call || 0} / 成功任务次</>} <Badge tone="green">视频</Badge></span>
                         ) : rowModelType === "embedding" ? (

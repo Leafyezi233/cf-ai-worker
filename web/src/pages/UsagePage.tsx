@@ -266,7 +266,7 @@ export default function UsagePage() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
         <div>
           <h2 className="text-lg sm:text-xl font-bold text-slate-900 dark:text-slate-100 tracking-tight">
-            用量与计费中心
+            用量与账单
           </h2>
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
             监控透传请求日志、月度对账报表、模型消费排行榜与成本突增异常告警

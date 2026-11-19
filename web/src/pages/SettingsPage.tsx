@@ -23,9 +23,9 @@ import {
   IconHistory,
   IconAlertTriangle,
 } from "../components/icons";
-import AdminVideoTasks, { recordQuery, recordTimeDefaults, useAdminRecordPage } from "../components/AdminVideoTasks";
+import { recordQuery, recordTimeDefaults, useAdminRecordPage } from "../components/AdminVideoTasks";
 import { useAdminFilters } from "../hooks/useAdminFilters";
-import { SettingsLocator } from "../components/SettingsLocator";
+import { SETTINGS_TABS, settingsTabFor, readTabParam, writeTabParam, type SettingsTabId } from "../components/SettingsLocator";
 import UsageRetentionMaintenance from "../components/UsageRetentionMaintenance";
 import { useToast } from "../components/Toast";
 import { useQuery } from "../hooks/useQuery";
@@ -62,7 +62,7 @@ function useSettingsDraft<T>(initial: T) {
   return [value, edit, hydrate, draft] as const;
 }
 
-export default function SettingsPage() {
+export default function SettingsPage({ view = "settings" }: { view?: "settings" | "audit" } = {}) {
   const toast = useToast();
 
   const fetchSettings = useCallback(async () => {
@@ -454,7 +454,7 @@ export default function SettingsPage() {
 
 client = OpenAI(
     base_url="${baseUrl}/v1",
-    api_key="YOUR_DEVICE_TOKEN" # 在设备管理中创建的 Device Token
+    api_key="YOUR_TOKEN" # 用户在控制台创建的子 Token
 )
 
 response = client.chat.completions.create(
@@ -494,22 +494,39 @@ console.log(message.content);`;
     "stream": false
   }'`;
 
+  const [tab, setTab] = useState<SettingsTabId>(() => settingsTabFor(readTabParam()));
+  const show = (section: string) => view === "audit" ? section === "audit" : (SETTINGS_TABS.find(t => t.id === tab)!.sections as readonly string[]).includes(section);
+  const selectTab = (id: SettingsTabId) => { setTab(id); writeTabParam(id === SETTINGS_TABS[0].id ? null : id); };
+
   return (
     <div className="space-y-6">
       { }
       <div>
         <h2 className="text-lg sm:text-xl font-bold text-slate-900 dark:text-slate-100 tracking-tight">
-          系统设置与安全控制中心
+          {view === "audit" ? "审计日志" : "系统设置"}
         </h2>
         <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-          管理 IP 白名单、API Key 轮转、审计日志、OpenAPI 规范文档与配置快照回滚
+          {view === "audit" ? "管理员和用户的每一次配置改动都记录在这里。" : "公告、预算告警、安全、备份与接入资料。"}
         </p>
       </div>
 
-      <SettingsLocator />
+      {view === "settings" ? (
+        <div role="tablist" aria-label="设置分类" className="flex flex-wrap gap-1 rounded-xl bg-slate-100 p-1 dark:bg-slate-800/60">
+          {SETTINGS_TABS.map(t => (
+            <button key={t.id} type="button" role="tab" aria-selected={tab === t.id}
+              onClick={() => selectTab(t.id)}
+              className={"rounded-lg px-3 py-1.5 text-sm font-medium transition-colors " + (tab === t.id
+                ? "bg-white text-slate-900 shadow-sm dark:bg-slate-900 dark:text-slate-100"
+                : "text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200")}>
+              {t.label}
+            </button>
+          ))}
+        </div>
+      ) : null}
       { }
+      {show("announcement") ? <>
       <Card id="settings-announcement"
-        title="📢 控制台公告 (Console Announcement)"
+        title="用户控制台公告"
         action={
           announcementForm.updated_at ? (
             <span className="text-[11px] text-slate-400 dark:text-slate-500">
@@ -522,10 +539,10 @@ console.log(message.content);`;
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-100 dark:border-slate-800">
             <div>
               <span className="text-xs font-semibold text-slate-800 dark:text-slate-200">
-                在设备控制台顶部显示一条公告
+                在用户控制台顶部显示一条公告
               </span>
               <p className="text-[11px] text-slate-400 mt-0.5">
-                只有持有有效设备 Token 的调用方能看到；关闭后立即从控制台消失，但内容会保留在这里。
+                只有登录的用户能看到。关闭后内容会保留在这里。
               </p>
             </div>
             <label className="relative inline-flex items-center cursor-pointer shrink-0">
@@ -585,7 +602,7 @@ console.log(message.content);`;
               maxLength={2000}
               value={announcementForm.message}
               onChange={(e) => setAnnouncementForm({ ...announcementForm, message: e.target.value })}
-              placeholder="这段文字会原样显示在设备控制台顶部。支持换行，不支持 Markdown 或 HTML。"
+              placeholder="显示在用户控制台顶部，支持换行。"
             />
           </div>
 
@@ -598,15 +615,17 @@ console.log(message.content);`;
       </Card>
 
       { }
-      <Card id="settings-access" title="🛡️ IP 白名单与管理后台访问控制 (IP Whitelist)">
+      </> : null}
+      {show("access") ? <>
+      <Card id="settings-access" title="后台访问白名单">
         <form onSubmit={handleSaveIpWhitelist} className="space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-100 dark:border-slate-800">
             <div>
               <span className="text-xs font-semibold text-slate-800 dark:text-slate-200">
-                限制 Admin 管理后台仅允许特定 IP / CIDR 网段访问
+                只允许这些 IP 或网段打开管理后台
               </span>
               <p className="text-[11px] text-slate-400 mt-0.5">
-                开启后，所有非白名单 IP 尝试访问管理后台 API 时将被直接拦截 (HTTP 403)
+                开启后，其他 IP 访问后台会被拒绝。先把你自己当前的 IP 加进去。
               </p>
             </div>
             <label className="relative inline-flex items-center cursor-pointer shrink-0">
@@ -680,11 +699,13 @@ console.log(message.content);`;
       </Card>
 
       { }
-      <Card id="settings-keys" title="🔑 API Key 轮转与生命周期追踪 (Key Lifecycle & Aging)">
+      </> : null}
+      {show("keys") ? <>
+      <Card id="settings-keys" title="密钥轮换">
         <div className="space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
             <p className="text-xs text-slate-500 dark:text-slate-400">
-              基于安全合规建议，定期轮换上游服务商 API Key 与设备 Token（推荐 90 天周期）
+              建议每 90 天更换一次上游密钥和账户 Token。
             </p>
             <Button variant="outline" size="sm" onClick={() => loadKeyRotation()} disabled={loadingKeyRotation}>
               <IconRefresh />
@@ -735,7 +756,7 @@ console.log(message.content);`;
                           {item.name}
                         </td>
                         <td className="py-2.5 px-2 font-mono text-slate-500">
-                          {item.type === "provider" ? "Provider Key" : "Device Token"}
+                          {item.type === "provider" ? "上游密钥" : "账户 Token"}
                         </td>
                         <td className="py-2.5 px-2 font-mono font-medium text-slate-700 dark:text-slate-300">
                           {item.age_days} 天
@@ -771,7 +792,7 @@ console.log(message.content);`;
                               一键轮换
                             </Button>
                           ) : (
-                            <span className="text-[11px] text-slate-400">在设备管理中撤销重签</span>
+                            <span className="text-[11px] text-slate-400">在「用户账户」里撤销后重新创建</span>
                           )}
                         </td>
                       </tr>
@@ -811,11 +832,13 @@ console.log(message.content);`;
       </Card>
 
       { }
-      <Card id="settings-audit" title="📜 管理员操作审计日志 (Audit Trail)">
+      </> : null}
+      {show("audit") ? <>
+      <Card id="settings-audit" title="操作记录">
         <div className="space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
             <p className="text-xs text-slate-500 dark:text-slate-400">
-              记录所有对 Provider、Model、Device、系统配置与快照的写操作（已加载 {auditLogs.length} 条，不执行全表计数）
+              已加载 {auditLogs.length} 条
             </p>
             <div className="flex items-center gap-2">
               <Button variant="outline" size="sm" onClick={handleExportAuditLogs} disabled={exportingAudit || !!auditInvalid}>
@@ -840,7 +863,7 @@ console.log(message.content);`;
             </label>)}
             <div className="flex flex-wrap gap-2"><Button type="submit">查询审计</Button><Button type="button" variant="ghost" onClick={() => { setAuditDraft(auditDefaults); resetAuditFilters(); }}>清空审计筛选</Button></div>
           </form>
-          <p className="text-xs text-slate-500">默认最近 30 天；导出使用已提交的相同条件，最多 1000 条，超限请缩小时间范围。编辑条件后请点击查询。</p>
+          <p className="text-xs text-slate-500">默认显示最近 30 天。改完条件点「查询审计」；导出最多 1000 条。</p>
           {auditPage.error && <div role="alert">{auditPage.error}（保留上次成功结果） <Button onClick={() => void auditPage.retry()} disabled={loadingAudit}>重试审计</Button></div>}
           {auditPage.stale && <p role="status">下方为旧筛选结果，等待新查询成功。</p>}
           {loadingAudit && <Spinner text="正在获取审计日志…" />}
@@ -897,13 +920,12 @@ console.log(message.content);`;
 
       {auditPage.capped && !auditPage.stale && <p role="status">已展示 1000 条审计记录。为控制页面开销，请缩小筛选范围，或使用导出（最多 1000 条，截断时会提示）；这不是全部匹配记录。</p>}
       {auditPage.cursor && !auditPage.capped && !auditPage.stale && <Button disabled={loadingAudit || !!auditPage.error} onClick={() => void auditPage.more()}>加载更多审计</Button>}
-      <div id="settings-tasks"><AdminVideoTasks /></div>
-
-      { }
-      <Card id="settings-openapi" title="📑 OpenAPI 3.0 规范文档与开发工具集成 (OpenAPI Spec)">
+      </> : null}
+      {show("openapi") ? <>
+      <Card id="settings-openapi" title="OpenAPI 文档">
         <div className="space-y-3">
           <p className="text-xs text-slate-500 dark:text-slate-400">
-            网关已自动基于您当前启用的模型与服务商，动态生成完整的 OpenAPI 3.0.3 标准规范。可直接导入 Postman、Swagger UI、Scalar、Apifox 或 API 调试客户端。
+            根据已启用的模型自动生成，可以导入 Postman、Apifox 等调试工具。
           </p>
 
           <div className="flex flex-wrap items-center gap-2 pt-1">
@@ -926,11 +948,13 @@ console.log(message.content);`;
       </Card>
 
       { }
-      <Card id="settings-snapshots" title="📸 配置版本快照与历史回滚 (Config Snapshots & Rollback)">
+      </> : null}
+      {show("snapshots") ? <>
+      <Card id="settings-snapshots" title="配置快照">
         <div className="space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
             <p className="text-xs text-slate-500 dark:text-slate-400">
-              对全局 Provider、Model 规则与系统设置创建快照备份，支持一键安全恢复回滚
+              备份上游、模型和系统设置，出问题时可以一键恢复。
             </p>
             <Button size="sm" onClick={() => setShowCreateModal(true)}>
               <IconCamera />
@@ -1022,7 +1046,9 @@ console.log(message.content);`;
       </Card>
 
       { }
-      <Card id="settings-budget" title="💰 月度预算与超额熔断 (Budget & Quota Limits)">
+      </> : null}
+      {show("budget") ? <>
+      <Card id="settings-budget" title="全站月度预算">
         <form onSubmit={handleSaveBudget} className="space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div>
@@ -1075,7 +1101,9 @@ console.log(message.content);`;
       </Card>
 
       { }
-      <Card id="settings-webhook" title="🔔 Webhook 告警与事件通知 (Webhook Alerts)">
+      </> : null}
+      {show("webhook") ? <>
+      <Card id="settings-webhook" title="Webhook 告警">
         <form onSubmit={handleSaveWebhook} className="space-y-4">
           <div>
             <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
@@ -1107,10 +1135,14 @@ console.log(message.content);`;
         </form>
       </Card>
 
+      </> : null}
+      {show("retention") ? <>
       <div id="settings-retention"><UsageRetentionMaintenance /></div>
 
       { }
-      <Card id="settings-cache" title="⚡ 多级响应缓存优化 (Multi-Tier Caching)">
+      </> : null}
+      {show("cache") ? <>
+      <Card id="settings-cache" title="响应缓存">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="space-y-1">
             <div className="flex items-center gap-2">
@@ -1148,7 +1180,9 @@ console.log(message.content);`;
       </Card>
 
       { }
-      <Card id="settings-sdk" title="💻 客户端接入指南 (SDK Code Snippets)">
+      </> : null}
+      {show("sdk") ? <>
+      <Card id="settings-sdk" title="客户端示例代码">
         <div className="space-y-4">
           <div className="flex items-center gap-2 border-b border-slate-100 dark:border-slate-800 pb-3 overflow-x-auto whitespace-nowrap">
             <button
@@ -1213,6 +1247,7 @@ console.log(message.content);`;
           </div>
         </div>
       </Card>
+      </> : null}
     </div>
   );
 }

@@ -85,8 +85,8 @@ export default function AdminVideoTasks() {
     query = recordQuery(filters, "task_", ["status", "device_id", "task_id"]);
   } catch (err) { invalid = (err as Error).message; }
   const page = useAdminRecordPage<TaskRow>("/api/video-tasks", query, invalid);
-  return <Card title="视频任务管理（只读）">
-    <p className="text-xs text-slate-500 mb-3">默认最近 30 天，待人工复核任务。仅查询本地记录；不轮询上游，不执行重派、扣费或退款。</p>
+  return <Card title="任务列表">
+    <p className="text-xs text-slate-500 mb-3">默认显示最近 30 天内待核对的任务。</p>
     <form className="grid gap-2 sm:grid-cols-3" onSubmit={event => {
       event.preventDefault();
       for (const key of Object.keys(defaults)) setFilter(key, draft[key]);

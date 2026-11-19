@@ -164,10 +164,10 @@ describe("audit/task UI query isolation and response safety", () => {
   it("renders safe task management SSR controls without any fetch or mutation; settings initializer is audit-independent", () => {
     const spy = vi.spyOn(api, "get");
     const html = renderToStaticMarkup(React.createElement(MemoryRouter, null, React.createElement(AdminVideoTasks)));
-    for (const text of ["视频任务管理（只读）", "最近 30 天", "任务状态", "账户 ID", "任务 ID", "任务开始时间", "任务结束时间", "查询任务", "手动刷新", "不轮询上游"]) expect(html).toContain(text);
+    for (const text of ["任务列表", "最近 30 天", "任务状态", "账户 ID", "任务 ID", "任务开始时间", "任务结束时间", "查询任务", "手动刷新"]) expect(html).toContain(text);
     expect(spy).not.toHaveBeenCalled();
     const source = readFileSync(new URL("../../web/src/pages/SettingsPage.tsx", import.meta.url), "utf8");
-    expect(source).toContain("[loadIpWhitelist, loadKeyRotation, loadSnapshots]"); expect(source).toContain("<AdminVideoTasks />");
+    expect(source).toContain("[loadIpWhitelist, loadKeyRotation, loadSnapshots]"); expect(readFileSync(new URL("../../web/src/pages/VideoTasksPage.tsx", import.meta.url), "utf8")).toContain("<AdminVideoTasks />");
     const taskSource = readFileSync(new URL(componentPath, import.meta.url), "utf8");
     expect(taskSource).not.toMatch(/setInterval|api\.post|reconcile|diagnostics/);
   });

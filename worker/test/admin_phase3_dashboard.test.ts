@@ -3,7 +3,7 @@ import { createRequire } from "node:module";
 const f=vi.hoisted(()=>({get:vi.fn(),search:"",query:undefined as any}));
 vi.mock("../../web/src/api/client",()=>({api:{get:f.get},fmtNum:String,fmtTime:String}));
 vi.mock("../../web/src/hooks/useTheme",()=>({useTheme:()=>({resolvedTheme:"light"})}));
-vi.mock("../../web/src/hooks/useQuery",()=>({useQuery:(key:string,fetcher:any,options:any)=>{f.query={key,fetcher,options};return {data:undefined,loading:false,refresh:vi.fn()};}}));
+vi.mock("../../web/src/hooks/useQuery",()=>({useQuery:(key:string,fetcher:any,options:any)=>{if(key.startsWith("dashboard-data"))f.query={key,fetcher,options};return {data:undefined,loading:false,refresh:vi.fn()};}}));
 const requireWeb=createRequire(new URL("../../web/package.json",import.meta.url));
 vi.doMock((requireWeb as any).resolve("react-router-dom"),()=>({useLocation:()=>({pathname:"/dashboard",search:f.search,hash:""}),useNavigate:()=>vi.fn(),Link:({children}:any)=>children}));
 const React=requireWeb("react");const {renderToStaticMarkup}=requireWeb("react-dom/server");
@@ -15,5 +15,5 @@ describe("dashboard bounded range and request cost",()=>{
  it.each(["7d","30d"])("deduplicates equal stats ranges for %s",async(range)=>{f.search="?list_range="+range;renderToStaticMarkup(React.createElement(DashboardPage));await f.query.fetcher();expect(f.get).toHaveBeenCalledTimes(6);expect(f.get.mock.calls.filter(([url])=>url==="/api/usage/stats?range="+range)).toHaveLength(1);expect(f.query.key).toBe("dashboard-data:"+range);expect(f.get).toHaveBeenCalledWith("/api/usage/cache-stats?range="+range);});
  it("rejects failed primary stats instead of caching successful zeros",async()=>{f.get.mockRejectedValueOnce(Error("db_unavailable"));renderToStaticMarkup(React.createElement(DashboardPage));await expect(f.query.fetcher()).rejects.toThrow("db_unavailable");});
  it("reports failed secondary areas",async()=>{f.get.mockImplementation(async(p:string)=>{if(p.includes("cache-stats"))throw Error("failed");return p.includes("/stats?")?stats:p.includes("settings")?{}:{items:[]};});renderToStaticMarkup(React.createElement(DashboardPage));expect((await f.query.fetcher()).failedSections).toContain("缓存统计");});
- it("rejects unknown URL range and displays fixed statistical scopes",()=>{f.search="?list_range=all";const html=renderToStaticMarkup(React.createElement(DashboardPage));expect(f.query.key).toBe("dashboard-data:today");expect(html).toContain("趋势固定近7日");expect(html).toContain("查看对应范围用量");});
+ it("rejects unknown URL range and displays fixed statistical scopes",()=>{f.search="?list_range=all";const html=renderToStaticMarkup(React.createElement(DashboardPage));expect(f.query.key).toBe("dashboard-data:today");expect(html).toContain("查看对应范围用量");});
 });

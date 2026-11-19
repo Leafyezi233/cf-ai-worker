@@ -381,9 +381,9 @@ export default function ProvidersPage() {
     <div className="space-y-4 sm:space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
         <div>
-          <h2 className="text-lg sm:text-xl font-bold text-slate-900 dark:text-slate-100 tracking-tight">上游 Provider 管理</h2>
+          <h2 className="text-lg sm:text-xl font-bold text-slate-900 dark:text-slate-100 tracking-tight">上游接口</h2>
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-            配置上游 AI 服务商（OpenAI 兼容协议 / Anthropic / Google Gemini 协议）及其 API 密钥与地址
+            模型从这里调用上游服务。先在这里添加接口地址和密钥，再到「模型」里添加具体模型。
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
