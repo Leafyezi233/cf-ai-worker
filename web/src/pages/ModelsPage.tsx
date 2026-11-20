@@ -537,14 +537,23 @@ export default function ModelsPage() {
     if (pricingNotice?.confirmation && !confirm(pricingNotice.confirmation)) return;
     const referenceConfirmation = videoReferenceConfirmation(form.config_json);
     if (referenceConfirmation && !confirm(referenceConfirmation)) return;
+    // An enabled model without a price is rejected at call time (model_pricing_missing).
+    // Ask before saving it that way instead of letting users find out from failed calls.
+    // Video models already got their own auto-mode confirmation above.
+    if (!pricingNotice?.confirmation && form.enabled && savesAsUnpriced(form)) { setUnpricedPrompt(true); return; }
+    await save(form);
+  }
+
+  async function save(target: FormState) {
+    setUnpricedPrompt(false);
     setSubmitting(true);
     try {
-      if (form.id) {
-        await api.put(`/api/models/${form.id}`, serialize(form));
-        toast.success(`模型「${form.model_name}」已更新`);
+      if (target.id) {
+        await api.put(`/api/models/${target.id}`, serialize(target));
+        toast.success(`模型「${target.model_name}」已更新`);
       } else {
-        await api.post("/api/models", serialize(form));
-        toast.success(`模型「${form.model_name}」已创建`);
+        await api.post("/api/models", serialize(target));
+        toast.success(`模型「${target.model_name}」已创建`);
       }
       setShow(false);
       invalidateCache("dashboard-");
@@ -865,6 +874,9 @@ wire_specification = "openai"
     URL.revokeObjectURL(url);
   };
 
+  // Last hook on purpose: SSR harness tests address the earlier state slots by position.
+  const [unpricedPrompt, setUnpricedPrompt] = useState(false);
+
   if (loading && !items.length) return <Spinner text="正在加载模型列表…" />;
 
   return (
@@ -901,7 +913,7 @@ wire_specification = "openai"
       <ProtocolProbePanel modelIds={Array.from(selectedIds).filter(id => visibleIds.has(id))} providerId={filterProviderId} onApplied={refresh} />
 
       { }
-      <div className="rounded-xl border border-blue-100 dark:border-blue-900/50 bg-gradient-to-r from-blue-50/60 via-indigo-50/40 to-purple-50/50 dark:from-blue-950/30 dark:via-indigo-950/20 dark:to-purple-950/30 px-3.5 py-2.5 transition-all shadow-xs">
+      <div className="rounded-xl border border-brand-100 bg-brand-50/50 px-3.5 py-2.5 dark:border-brand-900/50 dark:bg-brand-500/5">
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2 flex-wrap min-w-0 text-xs">
             <span className="font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5 shrink-0">
@@ -909,9 +921,9 @@ wire_specification = "openai"
               <span>路由逻辑:</span>
             </span>
             <div className="flex items-center gap-1.5 text-xs text-slate-700 dark:text-slate-300 font-medium flex-wrap">
-              <span className="px-2 py-0.5 rounded bg-blue-100/80 dark:bg-blue-900/50 text-blue-900 dark:text-blue-200 font-semibold font-mono">1. 请求 Model</span>
+              <span className="px-2 py-0.5 rounded bg-brand-100/80 dark:bg-brand-900/50 text-brand-900 dark:text-brand-200 font-semibold font-mono">1. 请求 Model</span>
               <span className="text-slate-400">→</span>
-              <span className="px-2 py-0.5 rounded bg-indigo-100/80 dark:bg-indigo-900/50 text-indigo-900 dark:text-indigo-200 font-semibold font-mono">2. 别名优先</span>
+              <span className="px-2 py-0.5 rounded bg-brand-100/80 dark:bg-brand-900/50 text-brand-900 dark:text-brand-200 font-semibold font-mono">2. 别名优先</span>
               <span className="text-slate-400">→</span>
               <span className="px-2 py-0.5 rounded bg-purple-100/80 dark:bg-purple-900/50 text-purple-900 dark:text-purple-200 font-semibold font-mono">3. 原始直通</span>
               <span className="text-slate-400">→</span>
@@ -922,7 +934,7 @@ wire_specification = "openai"
           <button
             type="button"
             onClick={toggleBanner}
-            className="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 font-medium flex items-center gap-1 shrink-0 px-2 py-1 rounded-md hover:bg-blue-100/50 dark:hover:bg-blue-900/40 transition-colors cursor-pointer"
+            className="text-xs text-brand-600 dark:text-brand-400 hover:text-brand-800 dark:hover:text-brand-300 font-medium flex items-center gap-1 shrink-0 px-2 py-1 rounded-md hover:bg-brand-100/50 dark:hover:bg-brand-900/40 transition-colors cursor-pointer"
           >
             <span>{showBanner ? "收起说明" : "查看说明"}</span>
             <span className="text-[10px]">{showBanner ? "▲" : "▼"}</span>
@@ -930,18 +942,18 @@ wire_specification = "openai"
         </div>
 
         {showBanner ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 mt-2.5 pt-2.5 border-t border-blue-100/80 dark:border-blue-900/40 text-xs animate-in fade-in slide-in-from-top-1 duration-200">
-            <div className="p-3 bg-white/90 dark:bg-slate-900/80 rounded-lg border border-blue-100/80 dark:border-blue-900/40 shadow-xs space-y-1">
-              <div className="text-blue-600 dark:text-blue-400 font-bold text-xs">1. 客户端请求 (Model)</div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 mt-2.5 pt-2.5 border-t border-brand-100/80 dark:border-brand-900/40 text-xs animate-in fade-in slide-in-from-top-1 duration-200">
+            <div className="p-3 bg-white/90 dark:bg-slate-900/80 rounded-lg border border-brand-100/80 dark:border-brand-900/40 shadow-xs space-y-1">
+              <div className="text-brand-600 dark:text-brand-400 font-bold text-xs">1. 客户端请求 (Model)</div>
               <p className="text-slate-600 dark:text-slate-300 text-xs leading-relaxed">
-                提取客户端 <code className="font-semibold text-blue-900 dark:text-blue-200 bg-blue-100/70 dark:bg-blue-900/40 border-blue-200/60 dark:border-blue-800/60">model</code> 参数（如 <code>gpt-4o</code>、<code>claude</code> 或 <code>deepseek-v3</code>）。
+                提取客户端 <code className="font-semibold text-brand-900 dark:text-brand-200 bg-brand-100/70 dark:bg-brand-900/40 border-brand-200/60 dark:border-brand-800/60">model</code> 参数（如 <code>gpt-4o</code>、<code>claude</code> 或 <code>deepseek-v3</code>）。
               </p>
             </div>
 
-            <div className="p-3 bg-white/90 dark:bg-slate-900/80 rounded-lg border border-indigo-100/80 dark:border-indigo-900/40 shadow-xs space-y-1">
-              <div className="text-indigo-600 dark:text-indigo-400 font-bold text-xs">2. 别名优先匹配 (Alias)</div>
+            <div className="p-3 bg-white/90 dark:bg-slate-900/80 rounded-lg border border-brand-100/80 dark:border-brand-900/40 shadow-xs space-y-1">
+              <div className="text-brand-600 dark:text-brand-400 font-bold text-xs">2. 别名优先匹配 (Alias)</div>
               <p className="text-slate-600 dark:text-slate-300 text-xs leading-relaxed">
-                <strong>第一优先级</strong>：优先匹配 <strong>快捷别名</strong>，如将 <code className="font-semibold text-indigo-900 dark:text-indigo-200 bg-indigo-100/70 dark:bg-indigo-900/40 border-indigo-200/60 dark:border-indigo-800/60">gpt4</code> 映射转发至 <code>gpt-4o-2024-11-20</code>。
+                <strong>第一优先级</strong>：优先匹配 <strong>快捷别名</strong>，如将 <code className="font-semibold text-brand-900 dark:text-brand-200 bg-brand-100/70 dark:bg-brand-900/40 border-brand-200/60 dark:border-brand-800/60">gpt4</code> 映射转发至 <code>gpt-4o-2024-11-20</code>。
               </p>
             </div>
 
@@ -987,11 +999,11 @@ wire_specification = "openai"
 
         { }
         {selectedIds.size > 0 ? (
-          <div className="flex flex-wrap items-center gap-2 bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-800 px-3 py-1.5 rounded-xl text-xs animate-in fade-in slide-in-from-top-1 duration-200 w-full sm:w-auto">
-            <span className="font-semibold text-blue-900 dark:text-blue-300">已选 {selectedIds.size} 项（隐藏 {hiddenSelectionCount} 项）</span>
+          <div className="flex flex-wrap items-center gap-2 bg-brand-50 dark:bg-brand-950/60 border border-brand-200 dark:border-brand-800 px-3 py-1.5 rounded-xl text-xs animate-in fade-in slide-in-from-top-1 duration-200 w-full sm:w-auto">
+            <span className="font-semibold text-brand-900 dark:text-brand-300">已选 {selectedIds.size} 项（隐藏 {hiddenSelectionCount} 项）</span>
             {hiddenSelectionCount > 0 ? <><span role="alert">存在隐藏选项，清理后才能批量操作。</span><Button type="button" size="sm" variant="outline" onClick={() => setSelectedIds(new Set([...selectedIds].filter(id => visibleIds.has(id))))}>清理隐藏选择</Button></> : null}
             <ModelCategoryAssignment state={categories} modelNames={items.filter(m => selectedIds.has(m.id)).map(categoryModelName)} label="批量分类" disabled={batchOperating || hiddenSelectionCount > 0} />
-            <div className="h-4 w-px bg-blue-200 dark:bg-blue-800 mx-1 hidden sm:block" />
+            <div className="h-4 w-px bg-brand-200 dark:bg-brand-800 mx-1 hidden sm:block" />
             <Button
               size="sm"
               variant="outline"
@@ -1086,7 +1098,7 @@ wire_specification = "openai"
             onClick={() => setFilter("capability", tag.key)}
             className={`px-2.5 py-1 rounded-lg text-xs font-semibold shrink-0 transition-all cursor-pointer ${
               filterCapability === tag.key
-                ? "bg-slate-900 text-white dark:bg-blue-600 dark:text-white shadow-xs"
+                ? "bg-slate-900 text-white dark:bg-brand-600 dark:text-white shadow-xs"
                 : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700"
             }`}
           >
@@ -1106,7 +1118,7 @@ wire_specification = "openai"
                       type="checkbox"
                       checked={isAllFilteredSelected}
                       onChange={toggleSelectAll}
-                      className="rounded border-slate-300 dark:border-slate-700 text-blue-600 focus:ring-blue-500 w-4 h-4 cursor-pointer align-middle"
+                      className="rounded border-slate-300 dark:border-slate-700 text-brand-600 focus:ring-brand-500 w-4 h-4 cursor-pointer align-middle"
                     />
                   </th>
                   <th className="pb-3 px-2 whitespace-nowrap">上游模型名 / 能力</th>
@@ -1135,14 +1147,14 @@ wire_specification = "openai"
                   return (
                     <tr
                       key={m.id}
-                      className={`transition-colors ${isSelected ? "bg-blue-50/50 dark:bg-blue-950/40" : "hover:bg-slate-50/60 dark:hover:bg-slate-800/50"}`}
+                      className={`transition-colors ${isSelected ? "bg-brand-50/50 dark:bg-brand-950/40" : "hover:bg-slate-50/60 dark:hover:bg-slate-800/50"}`}
                     >
                       <td className="py-3 px-3">
                         <input
                           type="checkbox"
                           checked={isSelected}
                           onChange={() => toggleSelectRow(m.id)}
-                          className="rounded border-slate-300 dark:border-slate-700 text-blue-600 focus:ring-blue-500 w-4 h-4 cursor-pointer align-middle"
+                          className="rounded border-slate-300 dark:border-slate-700 text-brand-600 focus:ring-brand-500 w-4 h-4 cursor-pointer align-middle"
                         />
                       </td>
                       <td className="py-3 px-2 whitespace-nowrap">
@@ -1373,7 +1385,7 @@ wire_specification = "openai"
                             else next.delete(name);
                             setSelectedModels(next);
                           }}
-                          className="rounded border-slate-300 dark:border-slate-700 text-blue-600 focus:ring-blue-500 w-4 h-4 cursor-pointer"
+                          className="rounded border-slate-300 dark:border-slate-700 text-brand-600 focus:ring-brand-500 w-4 h-4 cursor-pointer"
                         />
                         <span className="font-mono font-medium text-slate-800 dark:text-slate-200">{name}</span>
                       </div>
@@ -1500,8 +1512,8 @@ wire_specification = "openai"
               <option value="video">视频模型（标准按秒 / 旧版按成功任务次）</option>
             </Select>
             <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">未声明类型的旧配置沿用原规则：按次为图片，其余为文本。文本类型与计费单位独立；图片仅按次，向量仅按输入 Token，视频仅按成功任务次数计费。</p>
-            {resolvedModelType(form.config_json, form.billing_unit) === "embedding" ? <p className="mt-2 text-xs text-blue-600 dark:text-blue-400">{EMBEDDING_HELP}</p> : null}
-            {resolvedModelType(form.config_json, form.billing_unit) === "video" ? <p className="mt-2 text-xs text-blue-600 dark:text-blue-400">{VIDEO_HELP}</p> : null}
+            {resolvedModelType(form.config_json, form.billing_unit) === "embedding" ? <p className="mt-2 text-xs text-brand-600 dark:text-brand-400">{EMBEDDING_HELP}</p> : null}
+            {resolvedModelType(form.config_json, form.billing_unit) === "video" ? <p className="mt-2 text-xs text-brand-600 dark:text-brand-400">{VIDEO_HELP}</p> : null}
           </div>
 
           <div>
@@ -2000,7 +2012,7 @@ wire_specification = "openai"
             <input
               type="checkbox"
               id="model-enabled"
-              className="rounded border-slate-300 dark:border-slate-700 text-blue-600 focus:ring-blue-500 w-4 h-4 cursor-pointer"
+              className="rounded border-slate-300 dark:border-slate-700 text-brand-600 focus:ring-brand-500 w-4 h-4 cursor-pointer"
               checked={form.enabled}
               onChange={(e) => setForm({ ...form, enabled: e.target.checked })}
             />
@@ -2022,6 +2034,24 @@ wire_specification = "openai"
         </form>
       </Modal>
 
+      <Modal open={unpricedPrompt} onClose={() => setUnpricedPrompt(false)} title="这个模型还没有价格" maxWidth="max-w-md">
+        <div className="space-y-4">
+          <p className="text-sm leading-6 text-slate-600 dark:text-slate-300">
+            价格都是 0，计费模式是「自动」，所以它会被记为「未配置价格」。启用后，用户调用它会失败（model_pricing_missing）。
+          </p>
+          <ul className="space-y-1.5 text-xs leading-5 text-slate-500 dark:text-slate-400">
+            <li>· 想收费：返回填写价格。</li>
+            <li>· 想免费开放：返回把计费模式改成「免费」。</li>
+            <li>· 价格稍后再定：先保存为停用。</li>
+          </ul>
+          <div className="flex flex-wrap justify-end gap-2 border-t border-slate-100 pt-4 dark:border-slate-800">
+            <Button type="button" variant="ghost" onClick={() => setUnpricedPrompt(false)}>返回填写</Button>
+            <Button type="button" variant="outline" disabled={submitting} onClick={() => void save(form)}>仍然启用</Button>
+            <Button type="button" disabled={submitting} onClick={() => { setForm({ ...form, enabled: false }); void save({ ...form, enabled: false }); }}>保存为停用</Button>
+          </div>
+        </div>
+      </Modal>
+
       { }
       <Modal
         open={showExport}
@@ -2039,7 +2069,7 @@ wire_specification = "openai"
               onClick={() => setExportFormat("catalog")}
               className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors flex items-center gap-1.5 shrink-0 ${
                 exportFormat === "catalog"
-                  ? "bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-400"
+                  ? "bg-brand-50 text-brand-700 dark:bg-brand-950/60 dark:text-brand-400"
                   : "text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800"
               }`}
             >
@@ -2049,13 +2079,13 @@ wire_specification = "openai"
               onClick={() => setExportFormat("toml")}
               className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors shrink-0 ${
                 exportFormat === "toml"
-                  ? "bg-indigo-50 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-400"
+                  ? "bg-brand-50 text-brand-700 dark:bg-brand-950/60 dark:text-brand-400"
                   : "text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800"
               }`}
             >
               Codex config.toml
             </button>
-            <button type="button" onClick={() => setExportFormat("dsh")} className={"px-3 py-1.5 text-xs font-semibold rounded-lg shrink-0 " + (exportFormat === "dsh" ? "bg-blue-100 text-blue-800" : "text-slate-500")}>
+            <button type="button" onClick={() => setExportFormat("dsh")} className={"px-3 py-1.5 text-xs font-semibold rounded-lg shrink-0 " + (exportFormat === "dsh" ? "bg-brand-100 text-brand-800" : "text-slate-500")}>
               DSH profile (0.2.0-rc.2)
             </button>
             <button
@@ -2109,7 +2139,7 @@ wire_specification = "openai"
                   type="button"
                   onClick={handleDownloadCatalog}
                   disabled={downloadingCatalog || !serverCatalog || catalogLoading}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white shadow-sm transition-all cursor-pointer disabled:opacity-50"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-brand-600 hover:bg-brand-500 active:bg-brand-700 text-white shadow-sm transition-all cursor-pointer disabled:opacity-50"
                 >
                   <IconDownload className="w-3.5 h-3.5" />
                   <span>{downloadingCatalog ? "下载中…" : "下载 JSON 文件"}</span>
@@ -2159,7 +2189,7 @@ wire_specification = "openai"
           </div>
 
           {exportFormat === "catalog" ? (
-            <div className="p-3 bg-blue-50/70 dark:bg-blue-950/40 border border-blue-100 dark:border-blue-900/50 rounded-xl text-xs text-blue-800 dark:text-blue-300 space-y-1.5">
+            <div className="p-3 bg-brand-50/70 dark:bg-brand-950/40 border border-brand-100 dark:border-brand-900/50 rounded-xl text-xs text-brand-800 dark:text-brand-300 space-y-1.5">
               <div className="font-semibold flex items-center gap-1.5">
                 <span>💡 Codex 接入指南 (model-catalog.json)：</span>
               </div>
@@ -2168,13 +2198,13 @@ wire_specification = "openai"
               <p>3. 重启 Codex，即可在 <code>/model</code> 选择器中直接使用网关配置的所有已启用模型。</p>
             </div>
           ) : exportFormat === "toml" ? (
-            <div className="p-3 bg-indigo-50/70 dark:bg-indigo-950/40 border border-indigo-100 dark:border-indigo-900/50 rounded-xl text-xs text-indigo-800 dark:text-indigo-300 space-y-1">
+            <div className="p-3 bg-brand-50/70 dark:bg-brand-950/40 border border-brand-100 dark:border-brand-900/50 rounded-xl text-xs text-brand-800 dark:text-brand-300 space-y-1">
               <div className="font-semibold">💡 Codex config.toml 说明：</div>
               <p>1. 将配置追加到 <code>~/.codex/config.toml</code> 中，并将 <code>YOUR_DEVICE_TOKEN</code> 替换为您在「设备 Token」创建的有效 Token。</p>
               <p>2. 将 <code>model_catalog_json</code> 指向下载的 <code>model-catalog.json</code> 绝对路径。</p>
             </div>
           ) : exportFormat === "dsh" ? (
-            <div className="rounded-lg border border-blue-200 p-3 text-xs"><p>{DSH_PROFILE_HELP}</p><p>仅公开模型 ID 与已声明能力；无真实密钥、上游 URL、内部 ID、价格或系统提示词。</p></div>
+            <div className="rounded-lg border border-brand-200 p-3 text-xs"><p>{DSH_PROFILE_HELP}</p><p>仅公开模型 ID 与已声明能力；无真实密钥、上游 URL、内部 ID、价格或系统提示词。</p></div>
           ) : exportFormat === "pi" ? (
             <div className="p-3 bg-emerald-50/70 dark:bg-emerald-950/40 border border-emerald-100 dark:border-emerald-900/50 rounded-xl text-xs text-emerald-800 dark:text-emerald-300 space-y-1.5">
               <div className="font-semibold flex items-center gap-1.5">
@@ -2201,6 +2231,14 @@ wire_specification = "openai"
       </Modal>
     </div>
   );
+}
+
+/** True when saving this form leaves the model without a price ("unset"), mirroring resolveRowPricingModeForWrite. */
+export function savesAsUnpriced(f: FormState): boolean {
+  if (f.pricing_mode !== "auto") return false;
+  const payload = serialize(f);
+  if (payload.input_price_per_m > 0 || payload.output_price_per_m > 0) return false;
+  return !(payload.billing_unit === "call" && payload.price_per_call > 0);
 }
 
 export function serialize(f: FormState) {

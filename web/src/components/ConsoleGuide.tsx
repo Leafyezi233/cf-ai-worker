@@ -3,6 +3,7 @@ import { buildDshProfile, DSH_PROFILE_HELP, type ModelConfigMetadata } from "../
 import { isEmbeddingModel, isTextModel, isVideoModel } from "../utils/modelType";
 import type { ConsoleModels } from "../api/consoleClient";
 import { Card, CopyButton } from "./ui";
+import { GATEWAY_ERROR_HELP } from "../utils/gatewayErrors";
 
 type ModelItem = ConsoleModels["items"][number];
 
@@ -90,12 +91,6 @@ const ENDPOINTS: { method: string; path: string; desc: string }[] = [
   { method: "GET", path: "/v1/dashboard/billing/usage", desc: "OpenAI 兼容用量查询（3 RPM）" },
 ];
 
-const ERRORS: { code: string; meaning: string; fix: string }[] = [
-  { code: "401", meaning: "API key 无效或未携带", fix: "确认 Authorization: Bearer 头，Token 在设备控制台创建" },
-  { code: "400 per_call_text_only", meaning: "按次计费模型收到纯文本请求", fix: "该接口下此类按次模型需携带图片输入；纯文本请求请改用支持文本输入的模型" },
-  { code: "413", meaning: "请求体超过网关上限（10MB）", fix: "压缩或减少图片；若 1MB 就报 413，是你自己链路的反代限制" },
-  { code: "429", meaning: "触发限流", fix: "网关/console/billing 各有独立限流桶，稍后重试" },
-];
 
 export type ConnectionClient = "openai" | "anthropic" | "dsh";
 export type ConnectionProtocol = "/v1/chat/completions" | "/v1/responses" | "/v1/messages";
@@ -241,7 +236,7 @@ function SnippetTabs({ config, protocol }: { config: ConnectionConfig; protocol:
   return <div className="space-y-2">
     <div role="tablist" aria-label="示例代码" className="flex flex-wrap gap-1">
       {SNIPPET_TABS.map(tab => <button key={tab.key} type="button" role="tab" aria-selected={kind === tab.key} onClick={() => setKind(tab.key)}
-        className={"rounded-md px-2.5 py-1 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 " + (kind === tab.key
+        className={"rounded-md px-2.5 py-1 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 " + (kind === tab.key
           ? "bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900"
           : "text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800")}>{tab.label}</button>)}
     </div>
@@ -254,7 +249,7 @@ export function ConsoleDshExport({ models }: { models: ConsoleModels | null | un
   const dshExport = useMemo(() => show && models ? buildDshProfile(models.items, gatewayBase() + "/v1") : null, [show, models]);
   return <div className="space-y-3">
     <p>DSH 使用 profile JSON 配置，包含你可用的模型；密钥从环境变量 <Mono>CPG_API_KEY</Mono> 读取。</p>
-    <button type="button" onClick={() => setShow((value) => !value)} className="text-sm font-medium text-blue-600 hover:underline dark:text-blue-400">{show ? "收起 DSH 配置" : "生成 DSH 配置 JSON"}</button>
+    <button type="button" onClick={() => setShow((value) => !value)} className="text-sm font-medium text-brand-600 hover:underline dark:text-brand-400">{show ? "收起 DSH 配置" : "生成 DSH 配置 JSON"}</button>
     {show && !models && <p role="alert">模型列表加载失败，无法生成。</p>}
     {dshExport && <>
       {(dshExport.warnings.length > 0 || dshExport.skipped.length > 0) && <div role="status" className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-amber-900 dark:bg-amber-950 dark:text-amber-200">
@@ -270,7 +265,7 @@ export function ConsoleDshExport({ models }: { models: ConsoleModels | null | un
 function Step({ n, title, children, last = false }: { n: number; title: string; children: ReactNode; last?: boolean }) {
   return <li className="relative flex gap-4">
     {!last ? <span aria-hidden="true" className="absolute left-[13px] top-8 bottom-0 w-px bg-slate-200 dark:bg-slate-700" /> : null}
-    <span aria-hidden="true" className="relative z-10 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-blue-600 text-xs font-semibold text-white">{n}</span>
+    <span aria-hidden="true" className="relative z-10 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-brand-600 text-xs font-semibold text-white">{n}</span>
     <div className={"min-w-0 flex-1 space-y-3 " + (last ? "" : "pb-7")}>
       <h3 className="pt-0.5 text-sm font-semibold text-slate-900 dark:text-slate-100">{title}</h3>
       {children}
@@ -280,10 +275,10 @@ function Step({ n, title, children, last = false }: { n: number; title: string; 
 
 function Choice({ checked, title, text, onSelect }: { checked: boolean; title: string; text: string; onSelect: () => void }) {
   return <button type="button" role="radio" aria-checked={checked} onClick={onSelect}
-    className={"min-w-0 rounded-lg border px-3 py-2.5 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 " + (checked
-      ? "border-blue-500 bg-blue-50 ring-1 ring-blue-500 dark:border-blue-500 dark:bg-blue-950/40"
+    className={"min-w-0 rounded-lg border px-3 py-2.5 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 " + (checked
+      ? "border-brand-500 bg-brand-50 ring-1 ring-brand-500 dark:border-brand-500 dark:bg-brand-950/40"
       : "border-slate-200 hover:border-slate-300 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800")}>
-    <span className={"block text-sm font-medium " + (checked ? "text-blue-700 dark:text-blue-300" : "text-slate-800 dark:text-slate-100")}>{title}</span>
+    <span className={"block text-sm font-medium " + (checked ? "text-brand-700 dark:text-brand-300" : "text-slate-800 dark:text-slate-100")}>{title}</span>
     <span className="mt-0.5 block text-xs leading-5 text-slate-500 dark:text-slate-400">{text}</span>
   </button>;
 }
@@ -311,7 +306,7 @@ export function ConsoleConnectionWizard({ models, onOpenKeys, onOpenModels }: {
       <Step n={1} title="准备 API 密钥">
         <p>API 密钥就是<strong className="font-medium text-slate-800 dark:text-slate-100">子 Token</strong>：每个应用单独创建一个，明文只在创建时显示一次。登录用的主 Token 不要填进第三方应用，也不要放进公开链接。</p>
         {onOpenKeys
-          ? <button type="button" onClick={onOpenKeys} className="inline-flex items-center rounded-lg bg-blue-50 px-3 py-1.5 text-sm font-medium text-blue-700 hover:bg-blue-100 dark:bg-blue-950/50 dark:text-blue-300 dark:hover:bg-blue-900/50">创建子 Token →</button>
+          ? <button type="button" onClick={onOpenKeys} className="inline-flex items-center rounded-lg bg-brand-50 px-3 py-1.5 text-sm font-medium text-brand-700 hover:bg-brand-100 dark:bg-brand-950/50 dark:text-brand-300 dark:hover:bg-brand-900/50">创建子 Token →</button>
           : <p>前往账户中的 Token 管理创建子 Token，再返回继续配置。</p>}
       </Step>
 
@@ -343,14 +338,14 @@ export function ConsoleConnectionWizard({ models, onOpenKeys, onOpenModels }: {
           : options.length === 0 ? <p role="status" className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200">没有支持此客户端 / 协议的文本模型，请切换协议或联系管理员。</p>
           : <label className="block">
             <span className="sr-only">兼容模型</span>
-            <select aria-label="兼容模型" className="block w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 focus:border-blue-500 focus:outline-none focus:ring-4 focus:ring-blue-500/10 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+            <select aria-label="兼容模型" className="block w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 focus:border-brand-500 focus:outline-none focus:ring-4 focus:ring-brand-500/10 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
               value={config?.model ?? ""} onChange={(event) => setSelected(event.target.value)}>
               {options.map((model) => <option key={model.id} value={model.id}>{model.label === model.id ? model.id : model.label + " · " + model.id}</option>)}
             </select>
           </label>}
         <p className="text-xs leading-5 text-slate-500 dark:text-slate-400">
           仅列出你有权限、且支持所选协议的文本模型。
-          {onOpenModels ? <> <button type="button" onClick={onOpenModels} className="font-medium text-blue-600 hover:underline dark:text-blue-400">在模型广场查看价格 →</button></> : null}
+          {onOpenModels ? <> <button type="button" onClick={onOpenModels} className="font-medium text-brand-600 hover:underline dark:text-brand-400">在模型广场查看价格 →</button></> : null}
         </p>
       </Step>
 
@@ -514,7 +509,7 @@ export function ConsoleGuide({
                 <tbody>
                   {ENDPOINTS.map((e) => (
                     <tr key={e.method + e.path} className="border-t border-slate-100 dark:border-slate-800/80">
-                      <td className="py-2 pr-3 font-mono text-[11px] text-blue-600 dark:text-blue-400">{e.method}</td>
+                      <td className="py-2 pr-3 font-mono text-[11px] text-brand-600 dark:text-brand-400">{e.method}</td>
                       <td className="py-2 pr-3 font-mono text-[12px] text-slate-700 dark:text-slate-200">{e.path}</td>
                       <td className="py-2 pr-3">{e.desc}</td>
                       <td className="py-2"><CopyButton text={e.path} /></td>
@@ -534,24 +529,24 @@ export function ConsoleGuide({
               <li>峰谷定价：模型广场里显示当前倍率与时段，处于峰时按倍率上浮计价。</li>
               <li>预占机制：请求开始先冻结预估费用，响应结束后按实际用量结算、多余返还。</li>
             </ul>
-            {onOpenModels ? <button type="button" onClick={onOpenModels} className="text-sm font-medium text-blue-600 hover:underline dark:text-blue-400">查看具体价格 →</button> : null}
+            {onOpenModels ? <button type="button" onClick={onOpenModels} className="text-sm font-medium text-brand-600 hover:underline dark:text-brand-400">查看具体价格 →</button> : null}
           </RefSection>
 
-          <RefSection id="guide-errors" title="限制与常见错误" summary="401 / 400 / 413 / 429 的含义与处理">
+          <RefSection id="guide-errors" title="限制与常见错误" summary="报错代码是什么意思、该怎么办">
             <div className="-mx-1 overflow-x-auto">
               <table className="w-full text-[13px]">
                 <thead>
                   <tr className="text-left text-[11px] uppercase tracking-wide text-slate-400 dark:text-slate-500">
-                    <th scope="col" className="py-1.5 pr-3 font-medium">状态码</th>
-                    <th scope="col" className="py-1.5 pr-3 font-medium">含义</th>
-                    <th scope="col" className="py-1.5 font-medium">处理</th>
+                    <th scope="col" className="py-1.5 pr-3 font-medium">错误码</th>
+                    <th scope="col" className="py-1.5 pr-3 font-medium">意思</th>
+                    <th scope="col" className="py-1.5 font-medium">怎么办</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {ERRORS.map((e) => (
+                  {GATEWAY_ERROR_HELP.map((e) => (
                     <tr key={e.code} className="border-t border-slate-100 align-top dark:border-slate-800/80">
                       <td className="whitespace-nowrap py-2 pr-3 font-mono text-[12px] text-slate-700 dark:text-slate-200">{e.code}</td>
-                      <td className="py-2 pr-3">{e.meaning}</td>
+                      <td className="py-2 pr-3">{e.what}</td>
                       <td className="py-2">{e.fix}</td>
                     </tr>
                   ))}
@@ -559,7 +554,8 @@ export function ConsoleGuide({
               </table>
             </div>
             <p className="text-xs">
-              其他限制：请求体上限 10MB；错误响应统一为 OpenAI 形态 <Mono>{'{"error": {"message": ..., "type": ..., "code": ...}}'}</Mono>。
+              错误码在响应的 <Mono>error</Mono> 字段里，例如 <Mono>{'{"error": "insufficient_balance"}'}</Mono>；个别接口按 OpenAI 形态返回 <Mono>{'{"error": {"message", "type", "code"}}'}</Mono>，这时看 <Mono>code</Mono>。
+              请求体上限 10MB；如果 1MB 左右就报 413，通常是你自己链路上的反向代理限制。
             </p>
           </RefSection>
         </div>
