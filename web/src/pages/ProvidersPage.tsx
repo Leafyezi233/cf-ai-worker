@@ -415,9 +415,9 @@ export default function ProvidersPage() {
 
         { }
         {selectedIds.size > 0 ? (
-          <div className="flex flex-wrap items-center gap-2 bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-800 px-3 py-1.5 rounded-xl text-xs animate-in fade-in slide-in-from-top-1 duration-200 w-full sm:w-auto">
-            <span className="font-semibold text-blue-900 dark:text-blue-300">已选 {selectedIds.size} 项</span>
-            <div className="h-4 w-px bg-blue-200 dark:bg-blue-800 mx-1 hidden sm:block" />
+          <div className="flex flex-wrap items-center gap-2 bg-brand-50 dark:bg-brand-950/60 border border-brand-200 dark:border-brand-800 px-3 py-1.5 rounded-xl text-xs animate-in fade-in slide-in-from-top-1 duration-200 w-full sm:w-auto">
+            <span className="font-semibold text-brand-900 dark:text-brand-300">已选 {selectedIds.size} 项</span>
+            <div className="h-4 w-px bg-brand-200 dark:bg-brand-800 mx-1 hidden sm:block" />
             <Button
               size="sm"
               variant="outline"
@@ -470,7 +470,7 @@ export default function ProvidersPage() {
                       type="checkbox"
                       checked={isAllSelected}
                       onChange={toggleSelectAll}
-                      className="rounded border-slate-300 dark:border-slate-700 text-blue-600 focus:ring-blue-500 w-4 h-4 cursor-pointer align-middle"
+                      className="rounded border-slate-300 dark:border-slate-700 text-brand-600 focus:ring-brand-500 w-4 h-4 cursor-pointer align-middle"
                     />
                   </th>
                   <th className="pb-3 px-2 whitespace-nowrap">名称</th>
@@ -489,14 +489,14 @@ export default function ProvidersPage() {
                   return (
                     <tr
                       key={p.id}
-                      className={`transition-colors ${isSelected ? "bg-blue-50/50 dark:bg-blue-950/40" : "hover:bg-slate-50/60 dark:hover:bg-slate-800/50"}`}
+                      className={`transition-colors ${isSelected ? "bg-brand-50/50 dark:bg-brand-950/40" : "hover:bg-slate-50/60 dark:hover:bg-slate-800/50"}`}
                     >
                       <td className="py-3 px-3">
                         <input
                           type="checkbox"
                           checked={isSelected}
                           onChange={() => toggleSelectRow(p.id)}
-                          className="rounded border-slate-300 dark:border-slate-700 text-blue-600 focus:ring-blue-500 w-4 h-4 cursor-pointer align-middle"
+                          className="rounded border-slate-300 dark:border-slate-700 text-brand-600 focus:ring-brand-500 w-4 h-4 cursor-pointer align-middle"
                         />
                       </td>
                       <td className="py-3 px-2 font-semibold text-slate-900 dark:text-slate-100 whitespace-nowrap">{p.name}</td>
@@ -627,7 +627,7 @@ export default function ProvidersPage() {
               </label>
               <button
                 type="button"
-                className="text-[11px] text-blue-600 dark:text-blue-400 hover:underline"
+                className="text-[11px] text-brand-600 dark:text-brand-400 hover:underline"
                 onClick={() => setShowKeyText(!showKeyText)}
               >
                 {showKeyText ? "隐藏明文" : "显示明文"}
@@ -708,7 +708,7 @@ export default function ProvidersPage() {
             <input
               type="checkbox"
               id="provider-enabled"
-              className="rounded border-slate-300 dark:border-slate-700 text-blue-600 focus:ring-blue-500 w-4 h-4 cursor-pointer"
+              className="rounded border-slate-300 dark:border-slate-700 text-brand-600 focus:ring-brand-500 w-4 h-4 cursor-pointer"
               checked={form.enabled}
               onChange={(e) => setForm({ ...form, enabled: e.target.checked })}
             />
@@ -746,10 +746,10 @@ export default function ProvidersPage() {
                   <span>💡 支持的 CC Switch 配置格式：</span>
                 </div>
                 <ul className="list-disc list-inside space-y-1 text-[11px] text-slate-500 dark:text-slate-400">
-                  <li>CC-Switch 导出的 SQL 备份文件（如 <code className="text-blue-600 dark:text-blue-400">cc-switch-export-*.sql</code>）</li>
-                  <li>CC-Switch JSON 配置数组或快照（<code className="text-blue-600 dark:text-blue-400">[&#123; name, settings_config, ... &#125;]</code>）</li>
-                  <li>CC-Switch 快捷导入链接（<code className="text-blue-600 dark:text-blue-400">ccswitch://v1/import?...</code>）</li>
-                  <li>Claude Code / Codex 环境变量与 <code className="text-blue-600 dark:text-blue-400">settings.json</code> / <code className="text-blue-600 dark:text-blue-400">.env</code></li>
+                  <li>CC-Switch 导出的 SQL 备份文件（如 <code className="text-brand-600 dark:text-brand-400">cc-switch-export-*.sql</code>）</li>
+                  <li>CC-Switch JSON 配置数组或快照（<code className="text-brand-600 dark:text-brand-400">[&#123; name, settings_config, ... &#125;]</code>）</li>
+                  <li>CC-Switch 快捷导入链接（<code className="text-brand-600 dark:text-brand-400">ccswitch://v1/import?...</code>）</li>
+                  <li>Claude Code / Codex 环境变量与 <code className="text-brand-600 dark:text-brand-400">settings.json</code> / <code className="text-brand-600 dark:text-brand-400">.env</code></li>
                 </ul>
               </div>
 
@@ -758,7 +758,7 @@ export default function ProvidersPage() {
                   <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
                     配置内容（粘贴或选择文件）
                   </label>
-                  <label className="text-[11px] text-blue-600 dark:text-blue-400 hover:underline cursor-pointer flex items-center gap-1 font-medium">
+                  <label className="text-[11px] text-brand-600 dark:text-brand-400 hover:underline cursor-pointer flex items-center gap-1 font-medium">
                     <IconUpload className="w-3.5 h-3.5" />
                     <span>选择本地文件 (.sql / .json)</span>
                     <input
@@ -818,7 +818,7 @@ export default function ProvidersPage() {
                 <button
                   type="button"
                   onClick={toggleSelectAllImport}
-                  className="text-xs text-blue-600 dark:text-blue-400 hover:underline cursor-pointer font-medium"
+                  className="text-xs text-brand-600 dark:text-brand-400 hover:underline cursor-pointer font-medium"
                 >
                   {importSelectedIndices.size === importPreview.length ? "取消全选" : "全选全部"}
                 </button>
@@ -833,7 +833,7 @@ export default function ProvidersPage() {
                       onClick={() => toggleSelectImportIndex(idx)}
                       className={`p-3 rounded-xl border transition-all cursor-pointer select-none ${
                         isChecked
-                          ? "bg-blue-50/40 dark:bg-blue-950/30 border-blue-200 dark:border-blue-800"
+                          ? "bg-brand-50/40 dark:bg-brand-950/30 border-brand-200 dark:border-brand-800"
                           : "bg-slate-50 dark:bg-slate-900/60 border-slate-200 dark:border-slate-800 opacity-60"
                       }`}
                     >
@@ -842,7 +842,7 @@ export default function ProvidersPage() {
                           type="checkbox"
                           checked={isChecked}
                           onChange={() => {}}
-                          className="mt-0.5 rounded border-slate-300 dark:border-slate-700 text-blue-600 focus:ring-blue-500 w-4 h-4 cursor-pointer"
+                          className="mt-0.5 rounded border-slate-300 dark:border-slate-700 text-brand-600 focus:ring-brand-500 w-4 h-4 cursor-pointer"
                         />
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2">
@@ -903,7 +903,7 @@ export default function ProvidersPage() {
                     id="import-models-opt"
                     checked={importModels}
                     onChange={(e) => setImportModels(e.target.checked)}
-                    className="rounded border-slate-300 dark:border-slate-700 text-blue-600 focus:ring-blue-500 w-4 h-4 cursor-pointer"
+                    className="rounded border-slate-300 dark:border-slate-700 text-brand-600 focus:ring-brand-500 w-4 h-4 cursor-pointer"
                   />
                   <label
                     htmlFor="import-models-opt"
@@ -918,7 +918,7 @@ export default function ProvidersPage() {
                     id="import-overwrite-opt"
                     checked={importOverwrite}
                     onChange={(e) => setImportOverwrite(e.target.checked)}
-                    className="rounded border-slate-300 dark:border-slate-700 text-blue-600 focus:ring-blue-500 w-4 h-4 cursor-pointer"
+                    className="rounded border-slate-300 dark:border-slate-700 text-brand-600 focus:ring-brand-500 w-4 h-4 cursor-pointer"
                   />
                   <label
                     htmlFor="import-overwrite-opt"

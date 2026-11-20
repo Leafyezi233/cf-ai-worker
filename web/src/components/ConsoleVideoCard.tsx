@@ -23,7 +23,7 @@ export function VideoTicketMedia({ ticket, contentPath, mode, onError }: { ticke
   if (!url || !Number.isFinite(videoExpiryTime(ticket.expires_at)) || videoExpiryTime(ticket.expires_at) <= Date.now()) return null;
   return <>
     {mode === "play" ? <video className="w-full max-h-96 rounded" src={url} controls preload="none" onError={onError} /> : null}
-    <a className="text-blue-600 underline" href={url} download target="_blank" rel="noopener noreferrer" referrerPolicy="no-referrer">保存视频（短时链接）</a>
+    <a className="text-brand-600 underline" href={url} download target="_blank" rel="noopener noreferrer" referrerPolicy="no-referrer">保存视频（短时链接）</a>
   </>;
 }
 

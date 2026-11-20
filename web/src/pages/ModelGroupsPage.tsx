@@ -532,8 +532,8 @@ export default function ModelGroupsPage() {
               <option value="video">视频模型（按成功任务次）</option>
             </Select>
             <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">未声明类型的旧配置沿用原规则：按次为图片，其余为文本。文本类型与计费单位独立；图片仅按次，向量仅按输入 Token，视频仅按成功任务次数计费。</p>
-            {resolvedModelType(draft.config_json, draft.billing_unit) === "embedding" ? <p className="mt-2 text-xs text-blue-600 dark:text-blue-400">{EMBEDDING_HELP}</p> : null}
-            {resolvedModelType(draft.config_json, draft.billing_unit) === "video" ? <p className="mt-2 text-xs text-blue-600 dark:text-blue-400">{VIDEO_HELP}</p> : null}
+            {resolvedModelType(draft.config_json, draft.billing_unit) === "embedding" ? <p className="mt-2 text-xs text-brand-600 dark:text-brand-400">{EMBEDDING_HELP}</p> : null}
+            {resolvedModelType(draft.config_json, draft.billing_unit) === "video" ? <p className="mt-2 text-xs text-brand-600 dark:text-brand-400">{VIDEO_HELP}</p> : null}
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">

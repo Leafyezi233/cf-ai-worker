@@ -44,7 +44,7 @@ export function ThemeToggle({ className = "" }: { className?: string }) {
       <button
         type="button"
         onClick={() => setOpen(!open)}
-        className="inline-flex items-center justify-center p-2 rounded-lg text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+        className="inline-flex items-center justify-center p-2 rounded-lg text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors focus:outline-none focus:ring-2 focus:ring-brand-500/20"
         title={`当前主题: ${theme === "system" ? "跟随系统" : theme === "dark" ? "深色" : "浅色"}`}
         aria-label="切换主题"
       >
@@ -66,7 +66,7 @@ export function ThemeToggle({ className = "" }: { className?: string }) {
                 }}
                 className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors ${
                   isSelected
-                    ? "bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-400 font-semibold"
+                    ? "bg-brand-50 text-brand-700 dark:bg-brand-950/60 dark:text-brand-400 font-semibold"
                     : "text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
                 }`}
               >
@@ -74,7 +74,7 @@ export function ThemeToggle({ className = "" }: { className?: string }) {
                   <Icon className="w-3.5 h-3.5" />
                   <span>{opt.label}</span>
                 </div>
-                {isSelected && <IconCheck className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />}
+                {isSelected && <IconCheck className="w-3.5 h-3.5 text-brand-600 dark:text-brand-400" />}
               </button>
             );
           })}

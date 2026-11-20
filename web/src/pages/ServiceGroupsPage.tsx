@@ -180,7 +180,7 @@ export default function ServiceGroupsPage() {
     {loading && !groups.length && <Spinner text="正在读取服务分组…" />}
     <div className="grid gap-5 lg:grid-cols-[260px_minmax(0,1fr)]">
       <Card title="分组列表" action={<Button size="sm" disabled={busy} onClick={() => open(null)}>新建</Button>}>
-        <div className="space-y-2">{filteredGroups.length === 0 && !loading && !loadError && <p className="text-sm text-slate-500">{groups.length ? "无匹配服务分组，请调整筛选" : "暂无服务分组"}</p>}{filteredGroups.map(g => <button type="button" disabled={busy} key={g.id} onClick={() => open(g)} className={"w-full rounded-lg border p-3 text-left " + (selected === g.id ? "border-blue-500 bg-blue-50 dark:bg-blue-950/30" : "border-slate-200 dark:border-slate-700")}>
+        <div className="space-y-2">{filteredGroups.length === 0 && !loading && !loadError && <p className="text-sm text-slate-500">{groups.length ? "无匹配服务分组，请调整筛选" : "暂无服务分组"}</p>}{filteredGroups.map(g => <button type="button" disabled={busy} key={g.id} onClick={() => open(g)} className={"w-full rounded-lg border p-3 text-left " + (selected === g.id ? "border-brand-500 bg-brand-50 dark:bg-brand-950/30" : "border-slate-200 dark:border-slate-700")}>
           <div className="font-medium break-all">{g.name}</div><div className="mt-1 flex flex-wrap gap-1"><Badge tone={g.enabled ? "green" : "slate"}>{g.enabled ? "启用" : "停用"}</Badge><Badge>{g.public_selectable ? "公开" : "私有"}</Badge><Badge>{g.selectable ? "可自选" : "不可自选"}</Badge><span className="text-xs text-slate-500">{g.models?.length ?? 0} 条映射</span><span className="text-xs text-slate-500">× {g.multiplier}</span></div>
         </button>)}</div>
       </Card>

@@ -154,7 +154,7 @@ function ModelCard({ group, onOpen }: { group: ModelGroup; onOpen: (name: string
   const displayName = displayNames.length === 1 && displayNames[0] && displayNames[0] !== group.model_name ? displayNames[0] : null;
   return <div role="button" tabIndex={0} onClick={() => onOpen(group.model_name)}
     onKeyDown={e => { if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); onOpen(group.model_name); } }}
-    className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 hover:border-blue-300 hover:shadow-sm dark:hover:border-blue-800 transition cursor-pointer p-4 flex flex-col gap-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">
+    className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 hover:border-brand-300 hover:shadow-sm dark:hover:border-brand-800 transition cursor-pointer p-4 flex flex-col gap-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500">
     <div className="flex items-start justify-between gap-2">
       <div className="min-w-0"><div className="font-medium break-all">{group.model_name}</div>{displayName ? <div className="text-xs text-slate-500 dark:text-slate-400 break-words">{displayName}</div> : null}</div>
       <span onClick={e => e.stopPropagation()}><CopyButton text={group.model_name} /></span>
@@ -172,7 +172,7 @@ function ModelCard({ group, onOpen }: { group: ModelGroup; onOpen: (name: string
     {embedding ? <div className="text-xs text-slate-500 dark:text-slate-400">向量仅收输入 Token，不收输出费用；无响应缓存。</div> : null}
     {video ? <VideoMinimumPrices offers={group.offers.filter(isVideoModel)} /> : null}
     {group.offers.some(m=>!isVideoModel(m)&&m.billing_unit==="call") ? <MinimumPrice group={group} kind="call" label="按次" /> : null}
-    <div className="text-xs text-blue-600 dark:text-blue-400 mt-auto">{group.offers.length} 个授权组报价 · 查看各组完整价格与能力 →</div>
+    <div className="text-xs text-brand-600 dark:text-brand-400 mt-auto">{group.offers.length} 个授权组报价 · 查看各组完整价格与能力 →</div>
   </div>;
 }
 
@@ -213,7 +213,7 @@ export function ModelOfferCard({ m, tzOffsetMinutes }: { m: ModelItem; tzOffsetM
   const embedding = isEmbeddingModel(m);
   const byCall = !embedding && (video || m.billing_unit === "call");
   const cacheFallback = m.pricing_mode === "priced" && (!m.cache_read_price_per_m || !m.cache_write_price_per_m);
-  return <section aria-label={m.service_group_name + "组报价"} className={"min-w-0 overflow-hidden rounded-lg border bg-white dark:bg-slate-900 " + (m.is_current ? "border-blue-200 dark:border-blue-800" : "border-slate-200 dark:border-slate-800")}>
+  return <section aria-label={m.service_group_name + "组报价"} className={"min-w-0 overflow-hidden rounded-lg border bg-white dark:bg-slate-900 " + (m.is_current ? "border-brand-200 dark:border-brand-800" : "border-slate-200 dark:border-slate-800")}>
     <div className="space-y-3 p-4">
       <div className="flex flex-wrap items-center gap-2">
         <h4 className="min-w-0 break-words font-semibold text-slate-900 dark:text-slate-100">{m.service_group_name}</h4>
@@ -247,7 +247,7 @@ export function ModelOfferCard({ m, tzOffsetMinutes }: { m: ModelItem; tzOffsetM
       </div>
     </div>
     <details className="group border-t border-slate-100 dark:border-slate-800">
-      <summary className="cursor-pointer px-4 py-3 text-xs font-medium text-slate-600 hover:bg-slate-50 focus-visible:outline-blue-500 dark:text-slate-300 dark:hover:bg-slate-800/50">接口与计价详情<span className="ml-2 font-normal text-slate-400">推理档位、标价与时段</span></summary>
+      <summary className="cursor-pointer px-4 py-3 text-xs font-medium text-slate-600 hover:bg-slate-50 focus-visible:outline-brand-500 dark:text-slate-300 dark:hover:bg-slate-800/50">接口与计价详情<span className="ml-2 font-normal text-slate-400">推理档位、标价与时段</span></summary>
       <div className="space-y-4 px-4 pb-4 text-xs leading-relaxed">
         <dl className="space-y-2">
           {m.display_name && m.display_name !== m.model_name ? <div><dt className="text-slate-500 dark:text-slate-400">展示名称</dt><dd className="break-words">{m.display_name}</dd></div> : null}
@@ -337,8 +337,8 @@ export function ConsoleModelsSquare({ models, loading, error }: {
       <details className="group rounded-lg border border-slate-200 bg-slate-50 text-xs leading-relaxed text-slate-600 dark:border-slate-800 dark:bg-slate-900/60 dark:text-slate-400">
         <summary className="flex cursor-pointer list-none items-start justify-between gap-3 px-3 py-2 [&::-webkit-details-marker]:hidden">
           <span>{routingSummary(models?.routing)}</span>
-          <span className="shrink-0 font-medium text-blue-600 group-open:hidden dark:text-blue-400">计价说明</span>
-          <span className="hidden shrink-0 font-medium text-blue-600 group-open:inline dark:text-blue-400">收起</span>
+          <span className="shrink-0 font-medium text-brand-600 group-open:hidden dark:text-brand-400">计价说明</span>
+          <span className="hidden shrink-0 font-medium text-brand-600 group-open:inline dark:text-brand-400">收起</span>
         </summary>
         <ul className="list-disc space-y-1 border-t border-slate-200 px-3 py-2 pl-7 dark:border-slate-800">
           <li>价格单位为人民币，已计入当前峰谷倍率。</li>
