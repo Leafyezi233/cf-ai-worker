@@ -105,26 +105,28 @@ export default function DashboardPage() {
       <div className="flex flex-wrap items-center gap-2">
         <Select aria-label="仪表盘统计范围" className="!w-auto" value={range} onChange={e => setFilter("range", e.target.value)}><option value="today">今日</option><option value="7d">近7日</option><option value="30d">近30日</option></Select>
         <Button disabled={loading || isRefreshing} onClick={() => void refresh(true).catch(() => {})}>{isRefreshing ? "刷新中…" : "刷新统计"}</Button>
-        <Link className="text-sm text-blue-600" to={`/usage?list_range=${range}`}>查看对应范围用量</Link>
+        <Link className="text-sm text-brand-600" to={`/usage?list_range=${range}`}>查看对应范围用量</Link>
         <span className="text-xs text-slate-500">{updatedAt ? `更新于 ${fmtTime(updatedAt)}` : "尚未更新"}</span>
       </div>
       {error ? <p role="alert" className="text-sm text-red-600">统计读取失败：{error.message}。{data ? "下面是上次读到的数据。" : ""}</p> : null}
       {data?.failedSections.length ? <p role="alert" className="text-sm text-amber-600">部分区域读取失败：{data.failedSections.join("、")}，请刷新重试。</p> : null}
       { }
-      <div className="p-3.5 sm:p-4 rounded-2xl bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 text-white shadow-lg shadow-blue-500/15 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4">
-        <div className="flex items-center gap-3 min-w-0">
-          <div className="p-2 sm:p-2.5 rounded-xl bg-white/10 backdrop-blur-md shrink-0">
-            <IconTerminal className="w-4 h-4 sm:w-5 h-5 text-white" />
+      <div className="flex flex-col gap-3 rounded-2xl border border-slate-200/70 bg-white p-4 shadow-card dark:border-slate-800 dark:bg-slate-900 dark:shadow-none sm:flex-row sm:items-center sm:justify-between sm:px-5">
+        <div className="flex min-w-0 items-center gap-3">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-50 text-brand-600 dark:bg-brand-500/10 dark:text-brand-300">
+            <IconTerminal className="h-5 w-5" />
           </div>
           <div className="min-w-0">
-            <div className="text-[10px] sm:text-xs uppercase tracking-wider font-semibold text-blue-100">网关接入地址</div>
-            <div className="font-mono text-xs sm:text-base font-semibold text-white mt-0.5 break-all">{gatewayUrl || "https://ai.example.com"}</div>
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs font-medium text-slate-500 dark:text-slate-400">
+              <span>网关接入地址</span>
+              <span className="text-slate-300 dark:text-slate-600" aria-hidden="true">·</span>
+              <span>OpenAI & Anthropic 兼容</span>
+            </div>
+            <div className="mt-0.5 break-all font-mono text-sm font-semibold text-slate-900 dark:text-slate-100 sm:text-base">{gatewayUrl || "https://ai.example.com"}</div>
           </div>
         </div>
-        <div className="flex items-center justify-between sm:justify-end w-full sm:w-auto gap-2 bg-white/10 backdrop-blur-md px-3 py-1.5 rounded-xl text-xs shrink-0">
-          <span className="text-blue-100 text-[11px] sm:text-xs">OpenAI & Anthropic 兼容</span>
-          <CopyButton text={gatewayUrl || window.location.origin} label="复制 Base URL" />
-        </div>
+        <CopyButton text={gatewayUrl || window.location.origin} label="复制 Base URL"
+          className="self-start rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-slate-700 shadow-xs hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800 sm:self-auto" />
       </div>
 
       { }
@@ -169,14 +171,14 @@ export default function DashboardPage() {
 
       { }
       {cacheStats && (
-        <div className="p-4 sm:p-5 rounded-2xl border border-purple-100 dark:border-purple-900/40 bg-gradient-to-r from-purple-50/50 via-indigo-50/30 to-blue-50/40 dark:from-purple-950/20 dark:via-indigo-950/15 dark:to-blue-950/20 shadow-xs">
+        <div className="p-4 sm:p-5 rounded-2xl border border-slate-200/70 bg-white shadow-card dark:border-slate-800 dark:bg-slate-900 dark:shadow-none">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
             <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-xl bg-purple-600 text-white flex items-center justify-center shadow-sm shadow-purple-500/20">
+              <div className="w-9 h-9 rounded-xl bg-brand-50 text-brand-600 dark:bg-brand-500/10 dark:text-brand-300 flex items-center justify-center">
                 <IconZap className="w-4 h-4" />
               </div>
               <div>
-                <h3 className="text-sm font-bold text-slate-800 dark:text-slate-100 tracking-tight">
+                <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
                   响应缓存加速与成本节约
                 </h3>
                 <p className="text-[11px] text-slate-500 dark:text-slate-400">
@@ -185,34 +187,34 @@ export default function DashboardPage() {
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <span className="px-2.5 py-1 rounded-full bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300 text-xs font-semibold">
-                ⚡ 缓存加速比: {cacheStats.acceleration_ratio}x
+              <span className="px-2.5 py-1 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs font-semibold tabular-nums">
+                缓存加速比 {cacheStats.acceleration_ratio}x
               </span>
             </div>
           </div>
 
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <div className="p-3 rounded-xl bg-white/80 dark:bg-slate-900/80 border border-slate-200/60 dark:border-slate-800">
+            <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50">
               <div className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">命中次数 / 总请求</div>
-              <div className="text-lg font-bold text-purple-600 dark:text-purple-400 mt-1">
+              <div className="text-lg font-semibold tabular-nums text-slate-900 dark:text-slate-100 mt-1">
                 {cacheStats.cache_hits} <span className="text-xs text-slate-400 font-normal">/ {cacheStats.total_requests} ({cacheStats.cache_hit_rate}%)</span>
               </div>
             </div>
-            <div className="p-3 rounded-xl bg-white/80 dark:bg-slate-900/80 border border-slate-200/60 dark:border-slate-800">
+            <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50">
               <div className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">累计节省 Token</div>
-              <div className="text-lg font-bold text-indigo-600 dark:text-indigo-400 mt-1">
+              <div className="text-lg font-semibold tabular-nums text-slate-900 dark:text-slate-100 mt-1">
                 {fmtNum(cacheStats.tokens_saved)} <span className="text-xs text-slate-400 font-normal">Tokens</span>
               </div>
             </div>
-            <div className="p-3 rounded-xl bg-white/80 dark:bg-slate-900/80 border border-slate-200/60 dark:border-slate-800">
+            <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50">
               <div className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">累计节省上游费用</div>
-              <div className="text-lg font-bold text-emerald-600 dark:text-emerald-400 mt-1">
+              <div className="text-lg font-semibold tabular-nums text-slate-900 dark:text-slate-100 mt-1">
                 ¥{cacheStats.cost_saved_usd.toFixed(4)}
               </div>
             </div>
-            <div className="p-3 rounded-xl bg-white/80 dark:bg-slate-900/80 border border-slate-200/60 dark:border-slate-800">
+            <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50">
               <div className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">缓存平均延迟</div>
-              <div className="text-lg font-bold text-blue-600 dark:text-blue-400 mt-1">
+              <div className="text-lg font-semibold tabular-nums text-slate-900 dark:text-slate-100 mt-1">
                 {cacheStats.avg_cached_latency_ms}ms <span className="text-xs text-slate-400 font-normal">(上游: {cacheStats.avg_direct_latency_ms}ms)</span>
               </div>
             </div>
@@ -363,7 +365,7 @@ function BreakdownTable({ rows }: { rows: Array<{ name: string; requests: number
           </div>
           <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-1.5 overflow-hidden">
             <div
-              className="bg-blue-600 dark:bg-blue-500 h-full rounded-full transition-all duration-300"
+              className="bg-brand-600 dark:bg-brand-500 h-full rounded-full transition-all duration-300"
               style={{ width: `${Math.min(100, Math.max(5, (r.tokens / maxTokens) * 100))}%` }}
             />
           </div>

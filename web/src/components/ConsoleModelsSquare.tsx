@@ -140,7 +140,30 @@ function VideoMinimumPrices({offers}: {offers:ModelItem[]}) {
   return minima.length ? <div className="space-y-2">{minima.map(v=><div key={v.key}><div className="text-xs text-slate-500">{videoVariantLabel(v.quote)}最低</div><div className="font-mono font-semibold">{money(v.quote.price)}{videoUnit(v.quote)} · 成功任务结算</div><div className="text-xs text-slate-500">{v.offers.map(groupLabel).join("、")}</div></div>)}</div> : <div className="text-xs text-amber-600">{offers.every(m=>videoEndpoint(m)==="/v1/video/generations") ? "成功任务次价最低未定价" : "视频未定价（缺少有效规格报价）"}</div>;
 }
 
-function ModelCard({ group, onOpen }: { group: ModelGroup; onOpen: (name: string) => void }) {
+const AVATAR_TONES = ["bg-brand-600", "bg-emerald-600", "bg-sky-600", "bg-amber-600", "bg-rose-600", "bg-violet-600", "bg-teal-600", "bg-slate-700"];
+
+/** A stable two-letter tile for a model family, e.g. "gpt-4o" -> "GP", "deepseek-chat" -> "DE". */
+export function modelMonogram(name: string): { text: string; tone: string } {
+  const family = name.split(/[/:]/).pop()?.replace(/[^A-Za-z0-9]/g, "") || name;
+  let hash = 0;
+  for (const ch of family.replace(/\d+$/, "").toLowerCase()) hash = (hash * 31 + ch.charCodeAt(0)) >>> 0;
+  return { text: (family.slice(0, 2) || "?").toUpperCase(), tone: AVATAR_TONES[hash % AVATAR_TONES.length] };
+}
+
+/** The name to call a model with from a client, when the model can be used from the connection guide. */
+export function connectableModelId(offers: readonly ModelItem[]): string | null {
+  const offer = offers.find((m) => isTextModel(m) && m.billing_unit !== "call" && (!m.input_modalities || m.input_modalities.includes("text")));
+  return offer ? offer.alias || offer.model_name : null;
+}
+
+function UseButton({ id, onUse, className = "" }: { id: string; onUse: (id: string) => void; className?: string }) {
+  return <button type="button" onClick={(event) => { event.stopPropagation(); onUse(id); }}
+    className={"inline-flex items-center gap-1 rounded-lg bg-brand-600 px-2.5 py-1 text-xs font-medium text-white shadow-xs transition-colors hover:bg-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-900 " + className}>
+    接入<span aria-hidden="true">→</span><span className="sr-only">：生成 {id} 的接入配置</span>
+  </button>;
+}
+
+function ModelCard({ group, onOpen, onUse }: { group: ModelGroup; onOpen: (name: string) => void; onUse?: (id: string) => void }) {
   const token = group.offers.some(m => !isVideoModel(m) && m.billing_unit !== "call");
   const call = group.offers.some(m => !isEmbeddingModel(m) && (isVideoModel(m) || m.billing_unit === "call"));
   const output = group.offers.some(m => !isEmbeddingModel(m) && !isVideoModel(m) && m.billing_unit !== "call");
@@ -152,11 +175,16 @@ function ModelCard({ group, onOpen }: { group: ModelGroup; onOpen: (name: string
   const descriptions = [...new Set(group.offers.map(m => m.description || ""))];
   const displayNames = [...new Set(group.offers.map(m => m.display_name || ""))];
   const displayName = displayNames.length === 1 && displayNames[0] && displayNames[0] !== group.model_name ? displayNames[0] : null;
+  const avatar = modelMonogram(group.model_name);
+  const useId = onUse ? connectableModelId(group.offers) : null;
   return <div role="button" tabIndex={0} onClick={() => onOpen(group.model_name)}
     onKeyDown={e => { if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); onOpen(group.model_name); } }}
-    className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 hover:border-blue-300 hover:shadow-sm dark:hover:border-blue-800 transition cursor-pointer p-4 flex flex-col gap-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">
+    className="group/card bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs hover:border-brand-300 hover:shadow-card dark:hover:border-brand-800 transition cursor-pointer p-4 flex flex-col gap-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500">
     <div className="flex items-start justify-between gap-2">
-      <div className="min-w-0"><div className="font-medium break-all">{group.model_name}</div>{displayName ? <div className="text-xs text-slate-500 dark:text-slate-400 break-words">{displayName}</div> : null}</div>
+      <div className="flex min-w-0 items-start gap-3">
+        <span aria-hidden="true" className={"flex h-9 w-9 shrink-0 items-center justify-center rounded-xl font-mono text-[12px] font-bold text-white " + avatar.tone}>{avatar.text}</span>
+        <div className="min-w-0"><div className="font-medium break-all text-slate-900 dark:text-slate-100">{group.model_name}</div>{displayName ? <div className="text-xs text-slate-500 dark:text-slate-400 break-words">{displayName}</div> : null}</div>
+      </div>
       <span onClick={e => e.stopPropagation()}><CopyButton text={group.model_name} /></span>
     </div>
     <div className="flex flex-wrap gap-1.5">
@@ -172,7 +200,10 @@ function ModelCard({ group, onOpen }: { group: ModelGroup; onOpen: (name: string
     {embedding ? <div className="text-xs text-slate-500 dark:text-slate-400">向量仅收输入 Token，不收输出费用；无响应缓存。</div> : null}
     {video ? <VideoMinimumPrices offers={group.offers.filter(isVideoModel)} /> : null}
     {group.offers.some(m=>!isVideoModel(m)&&m.billing_unit==="call") ? <MinimumPrice group={group} kind="call" label="按次" /> : null}
-    <div className="text-xs text-blue-600 dark:text-blue-400 mt-auto">{group.offers.length} 个授权组报价 · 查看各组完整价格与能力 →</div>
+    <div className="mt-auto flex items-center justify-between gap-2 border-t border-slate-100 pt-3 dark:border-slate-800">
+      <span className="text-xs text-brand-600 dark:text-brand-400">{group.offers.length} 个授权组报价 · 查看各组完整价格与能力 →</span>
+      {useId && onUse ? <UseButton id={useId} onUse={onUse} className="shrink-0" /> : null}
+    </div>
   </div>;
 }
 
@@ -213,7 +244,7 @@ export function ModelOfferCard({ m, tzOffsetMinutes }: { m: ModelItem; tzOffsetM
   const embedding = isEmbeddingModel(m);
   const byCall = !embedding && (video || m.billing_unit === "call");
   const cacheFallback = m.pricing_mode === "priced" && (!m.cache_read_price_per_m || !m.cache_write_price_per_m);
-  return <section aria-label={m.service_group_name + "组报价"} className={"min-w-0 overflow-hidden rounded-lg border bg-white dark:bg-slate-900 " + (m.is_current ? "border-blue-200 dark:border-blue-800" : "border-slate-200 dark:border-slate-800")}>
+  return <section aria-label={m.service_group_name + "组报价"} className={"min-w-0 overflow-hidden rounded-lg border bg-white dark:bg-slate-900 " + (m.is_current ? "border-brand-200 dark:border-brand-800" : "border-slate-200 dark:border-slate-800")}>
     <div className="space-y-3 p-4">
       <div className="flex flex-wrap items-center gap-2">
         <h4 className="min-w-0 break-words font-semibold text-slate-900 dark:text-slate-100">{m.service_group_name}</h4>
@@ -247,7 +278,7 @@ export function ModelOfferCard({ m, tzOffsetMinutes }: { m: ModelItem; tzOffsetM
       </div>
     </div>
     <details className="group border-t border-slate-100 dark:border-slate-800">
-      <summary className="cursor-pointer px-4 py-3 text-xs font-medium text-slate-600 hover:bg-slate-50 focus-visible:outline-blue-500 dark:text-slate-300 dark:hover:bg-slate-800/50">接口与计价详情<span className="ml-2 font-normal text-slate-400">推理档位、标价与时段</span></summary>
+      <summary className="cursor-pointer px-4 py-3 text-xs font-medium text-slate-600 hover:bg-slate-50 focus-visible:outline-brand-500 dark:text-slate-300 dark:hover:bg-slate-800/50">接口与计价详情<span className="ml-2 font-normal text-slate-400">推理档位、标价与时段</span></summary>
       <div className="space-y-4 px-4 pb-4 text-xs leading-relaxed">
         <dl className="space-y-2">
           {m.display_name && m.display_name !== m.model_name ? <div><dt className="text-slate-500 dark:text-slate-400">展示名称</dt><dd className="break-words">{m.display_name}</dd></div> : null}
@@ -268,10 +299,15 @@ export function ModelOfferCard({ m, tzOffsetMinutes }: { m: ModelItem; tzOffsetM
   </section>;
 }
 
-function ModelDetail({ group, routing, tzOffsetMinutes, onClose }: { group: ModelGroup; routing: ConsoleModelMarketplace["routing"]; tzOffsetMinutes: number | undefined; onClose: () => void }) {
+function ModelDetail({ group, routing, tzOffsetMinutes, onClose, onUse }: { group: ModelGroup; routing: ConsoleModelMarketplace["routing"]; tzOffsetMinutes: number | undefined; onClose: () => void; onUse?: (id: string) => void }) {
+  const useId = onUse ? connectableModelId(group.offers) : null;
   return <Drawer open onClose={onClose} title={group.model_name} width="max-w-lg">
     <div className="space-y-4 text-sm">
       <ModelCategoryBadges offers={group.offers} all />
+      {useId && onUse ? <div className="flex items-center justify-between gap-3 rounded-xl border border-brand-200 bg-brand-50/70 px-3 py-2.5 dark:border-brand-900/60 dark:bg-brand-500/10">
+        <div className="min-w-0 text-xs leading-5 text-slate-600 dark:text-slate-300">调用名 <code className="break-all font-mono text-slate-900 dark:text-slate-100">{useId}</code>，在接入指南里选好应用就能复制配置。</div>
+        <UseButton id={useId} onUse={onUse} className="shrink-0" />
+      </div> : null}
       <div className="rounded-md border border-slate-200 bg-slate-50 p-3 text-xs leading-relaxed text-slate-600 dark:border-slate-800 dark:bg-slate-800/60 dark:text-slate-400">
         <p className="font-medium text-slate-800 dark:text-slate-200">{group.offers.length} 个分组报价</p>
         <p className="mt-1">{routingSummary(routing)}</p>
@@ -291,8 +327,10 @@ export function ModelTable({ groups, tzOffsetMinutes, onOpen }: { groups: ModelG
   </tr>))}</tbody></table></div>;
 }
 
-export function ConsoleModelsSquare({ models, loading, error }: {
+export function ConsoleModelsSquare({ models, loading, error, onUseModel }: {
   models: ConsoleModelMarketplace | null | undefined; loading: boolean; error: Error | null | undefined;
+  /** Opens the connection guide with this model selected. */
+  onUseModel?: (id: string) => void;
 }) {
   const [q, setQ] = useState("");
   const [filter, setFilter] = useState<FilterKey>("all");
@@ -337,8 +375,8 @@ export function ConsoleModelsSquare({ models, loading, error }: {
       <details className="group rounded-lg border border-slate-200 bg-slate-50 text-xs leading-relaxed text-slate-600 dark:border-slate-800 dark:bg-slate-900/60 dark:text-slate-400">
         <summary className="flex cursor-pointer list-none items-start justify-between gap-3 px-3 py-2 [&::-webkit-details-marker]:hidden">
           <span>{routingSummary(models?.routing)}</span>
-          <span className="shrink-0 font-medium text-blue-600 group-open:hidden dark:text-blue-400">计价说明</span>
-          <span className="hidden shrink-0 font-medium text-blue-600 group-open:inline dark:text-blue-400">收起</span>
+          <span className="shrink-0 font-medium text-brand-600 group-open:hidden dark:text-brand-400">计价说明</span>
+          <span className="hidden shrink-0 font-medium text-brand-600 group-open:inline dark:text-brand-400">收起</span>
         </summary>
         <ul className="list-disc space-y-1 border-t border-slate-200 px-3 py-2 pl-7 dark:border-slate-800">
           <li>价格单位为人民币，已计入当前峰谷倍率。</li>
@@ -361,9 +399,9 @@ export function ConsoleModelsSquare({ models, loading, error }: {
         <div role="group" aria-label="计费筛选" className="flex gap-1">{([{ key: "all", label: "全部计费" }, { key: "token", label: "按 Token" }, { key: "call", label: "按次 / 视频" }] as const).map(c => <Button key={c.key} size="sm" variant={billing === c.key ? "primary" : "ghost"} aria-pressed={billing === c.key} onClick={() => setBilling(c.key)}>{c.label}</Button>)}</div>
       </div></details>
       {q || filter !== "all" || category || capability !== "all" || billing !== "all" ? <Button size="sm" variant="ghost" onClick={() => { setQ(""); setFilter("all"); setCategory(""); setCapability("all"); setBilling("all"); }}>清除筛选</Button> : null}
-      {!filtered.length ? <Empty text="没有符合筛选条件的模型" /> : view === "grid" ? <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">{filtered.map(group => <ModelCard key={group.model_name} group={group} onOpen={setDetail} />)}</div>
+      {!filtered.length ? <Empty text="没有符合筛选条件的模型" /> : view === "grid" ? <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">{filtered.map(group => <ModelCard key={group.model_name} group={group} onOpen={setDetail} onUse={onUseModel} />)}</div>
         : <ModelTable groups={filtered} tzOffsetMinutes={tzOffsetMinutes} onOpen={setDetail} />}
     </div>}
-    {!loading && !error && selected ? <ModelDetail group={selected} routing={models?.routing} tzOffsetMinutes={tzOffsetMinutes} onClose={() => setDetail(null)} /> : null}
+    {!loading && !error && selected ? <ModelDetail group={selected} routing={models?.routing} tzOffsetMinutes={tzOffsetMinutes} onClose={() => setDetail(null)} onUse={onUseModel} /> : null}
   </Card>;
 }

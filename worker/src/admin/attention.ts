@@ -80,8 +80,42 @@ export async function attentionItems(env: Env, now = Date.now()): Promise<Attent
   return items;
 }
 
+/**
+ * First-run checklist for a new gateway: the minimum an operator has to do before users can call
+ * anything. The dashboard shows it until every step is done.
+ */
+export interface SetupStep {
+  key: string;
+  done: boolean;
+  text: string;
+  hint: string;
+  link: string;
+}
+
+export async function setupSteps(env: Env): Promise<SetupStep[]> {
+  await ensureSchema(env);
+  // Same pricing rule as the "unpriced" attention item above.
+  const row = await env.DB.prepare(
+    "SELECT (SELECT COUNT(*) FROM providers WHERE enabled=1) AS providers," +
+    "(SELECT COUNT(*) FROM models WHERE enabled=1) AS models," +
+    "(SELECT COUNT(*) FROM models WHERE enabled=1 AND CASE WHEN pricing_mode IN ('free','priced','unset') THEN pricing_mode " +
+    "WHEN COALESCE(input_price_per_m,0)>0 OR COALESCE(output_price_per_m,0)>0 THEN 'priced' ELSE 'unset' END<>'unset') AS priced," +
+    "(SELECT COUNT(*) FROM devices WHERE revoked_at IS NULL) AS accounts," +
+    "(EXISTS(SELECT 1 FROM usage) OR EXISTS(SELECT 1 FROM usage_monthly_rollups)) AS used"
+  ).first<{ providers: number; models: number; priced: number; accounts: number; used: number }>();
+  const n = (value: unknown) => Number(value) || 0;
+  return [
+    { key: "provider", done: n(row?.providers) > 0, text: "添加上游接口", hint: "填入模型服务商的地址和密钥", link: "/providers" },
+    { key: "model", done: n(row?.models) > 0, text: "启用模型", hint: "选出要开放给用户的模型", link: "/models" },
+    { key: "price", done: n(row?.priced) > 0, text: "设置价格", hint: "没有价格的模型，调用会失败", link: "/models?list_enabled=1&list_pricing=unset" },
+    { key: "account", done: n(row?.accounts) > 0, text: "创建用户账户", hint: "给用户发放调用 Token", link: "/devices" },
+    { key: "first_call", done: n(row?.used) > 0, text: "完成第一次调用", hint: "在「在线测试」里试一句", link: "/playground" },
+  ];
+}
+
 export const attentionApp = new Hono<{ Bindings: Env }>();
 attentionApp.get("/", async c => {
   c.header("Cache-Control", "no-store");
-  return c.json({ items: await attentionItems(c.env), checked_at: Date.now() });
+  const [items, setup] = await Promise.all([attentionItems(c.env), setupSteps(c.env)]);
+  return c.json({ items, setup, checked_at: Date.now() });
 });

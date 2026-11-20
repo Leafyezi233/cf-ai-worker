@@ -101,6 +101,9 @@ consoleApp.get("/me", async (c) => {
   const monthStart = monthStartMs();
   const monthlyCost = await getDeviceMonthlyCost(c.env, device.id, monthStart);
   const wallet = await getWallet(c.env, device.id);
+  const keys = await c.env.DB.prepare(
+    "SELECT COUNT(*) AS n FROM device_sub_tokens WHERE device_id = ? AND revoked_at IS NULL"
+  ).bind(device.id).first<{ n: number }>().catch(() => null);
   return c.json({
     device: {
       id: device.id,
@@ -117,6 +120,7 @@ consoleApp.get("/me", async (c) => {
       created_at: device.created_at,
       password_setup_required: !device.password_hash,
       calls_enabled: Number(device.calls_enabled ?? 1) !== 0,
+      api_key_count: Number(keys?.n ?? 0),
     },
   });
 });

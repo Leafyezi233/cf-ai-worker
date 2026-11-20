@@ -316,7 +316,7 @@ export default function PlaygroundPage() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h2 className="text-lg sm:text-xl font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
-            <IconPlayground className="text-blue-600 dark:text-blue-400" />
+            <IconPlayground className="text-brand-600 dark:text-brand-400" />
             在线测试
           </h2>
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
@@ -376,7 +376,7 @@ export default function PlaygroundPage() {
                   <button
                     type="button"
                     onClick={() => setShowSystemConfig(!showSystemConfig)}
-                    className="text-[11px] text-blue-600 dark:text-blue-400 hover:underline"
+                    className="text-[11px] text-brand-600 dark:text-brand-400 hover:underline"
                   >
                     {showSystemConfig ? "收起" : "展开编辑"}
                   </button>
@@ -384,7 +384,7 @@ export default function PlaygroundPage() {
                 {showSystemConfig && (
                   <textarea
                     rows={3}
-                    className="w-full text-xs p-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 font-mono focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                    className="w-full text-xs p-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 font-mono focus:ring-2 focus:ring-brand-500 focus:outline-none"
                     value={systemPrompt}
                     onChange={(e) => setSystemPrompt(e.target.value)}
                     placeholder="例如: You are a helpful AI assistant..."
@@ -395,7 +395,7 @@ export default function PlaygroundPage() {
               <div className="space-y-1.5 pt-2 border-t border-slate-100 dark:border-slate-800">
                 <div className="flex items-center justify-between">
                   <span className="font-medium text-slate-700 dark:text-slate-300">Temperature (多样性)</span>
-                  <span className="font-mono text-blue-600 dark:text-blue-400 font-bold">{temperature}</span>
+                  <span className="font-mono text-brand-600 dark:text-brand-400 font-bold">{temperature}</span>
                 </div>
                 <input
                   type="range"
@@ -404,7 +404,7 @@ export default function PlaygroundPage() {
                   step="0.1"
                   value={temperature}
                   onChange={(e) => setTemperature(parseFloat(e.target.value))}
-                  className="w-full h-1.5 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer accent-blue-600"
+                  className="w-full h-1.5 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer accent-brand-600"
                 />
               </div>
 
@@ -453,7 +453,7 @@ export default function PlaygroundPage() {
                   type="checkbox"
                   checked={stream}
                   onChange={(e) => setStream(e.target.checked)}
-                  className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 border-slate-300"
+                  className="w-4 h-4 rounded text-brand-600 focus:ring-brand-500 border-slate-300"
                 />
               </div>
             </div>
@@ -470,7 +470,7 @@ export default function PlaygroundPage() {
                   key={idx}
                   onClick={() => handleSendMessage(p.prompt)}
                   disabled={isGenerating}
-                  className="w-full text-left p-2 rounded-lg bg-slate-50 dark:bg-slate-800/60 hover:bg-blue-50 dark:hover:bg-blue-950/40 border border-slate-100 dark:border-slate-700/60 transition-colors text-xs text-slate-700 dark:text-slate-300 font-medium"
+                  className="w-full text-left p-2 rounded-lg bg-slate-50 dark:bg-slate-800/60 hover:bg-brand-50 dark:hover:bg-brand-950/40 border border-slate-100 dark:border-slate-700/60 transition-colors text-xs text-slate-700 dark:text-slate-300 font-medium"
                 >
                   {p.title}
                 </button>
@@ -485,7 +485,7 @@ export default function PlaygroundPage() {
           <div className="flex-1 p-4 overflow-y-auto space-y-4">
             {messages.length === 0 ? (
               <div className="h-full flex flex-col items-center justify-center text-center p-6">
-                <div className="w-12 h-12 rounded-2xl bg-blue-50 dark:bg-blue-950/50 flex items-center justify-center text-blue-600 dark:text-blue-400 mb-3">
+                <div className="w-12 h-12 rounded-2xl bg-brand-50 dark:bg-brand-950/50 flex items-center justify-center text-brand-600 dark:text-brand-400 mb-3">
                   <IconPlayground className="w-6 h-6" />
                 </div>
                 <h4 className="text-sm font-bold text-slate-800 dark:text-slate-200">开始您的模型测试</h4>
@@ -511,7 +511,7 @@ export default function PlaygroundPage() {
                   <div
                     className={`max-w-[88%] p-3.5 rounded-2xl text-xs sm:text-sm leading-relaxed whitespace-pre-wrap ${
                       m.role === "user"
-                        ? "bg-blue-600 text-white rounded-br-none shadow-sm"
+                        ? "bg-brand-600 text-white rounded-br-none shadow-sm"
                         : "bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-slate-100 rounded-bl-none border border-slate-200/50 dark:border-slate-700/50"
                     }`}
                   >
@@ -549,7 +549,7 @@ export default function PlaygroundPage() {
                 }}
                 placeholder={`向 ${selectedModel || "模型"} 发送消息 (Enter 发送, Shift+Enter 换行)…`}
                 disabled={isGenerating}
-                className="flex-1 text-xs p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-blue-500 focus:outline-none resize-none"
+                className="flex-1 text-xs p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-brand-500 focus:outline-none resize-none"
               />
               <Button
                 type="submit"

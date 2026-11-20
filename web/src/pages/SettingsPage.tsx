@@ -552,7 +552,7 @@ console.log(message.content);`;
                 onChange={(e) => setAnnouncementForm({ ...announcementForm, enabled: e.target.checked })}
                 className="sr-only peer"
               />
-              <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-slate-600 peer-checked:bg-blue-600"></div>
+              <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-slate-600 peer-checked:bg-brand-600"></div>
             </label>
           </div>
 
@@ -635,7 +635,7 @@ console.log(message.content);`;
                 onChange={(e) => setIpForm({ ...ipForm, enabled: e.target.checked })}
                 className="sr-only peer"
               />
-              <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-slate-600 peer-checked:bg-blue-600"></div>
+              <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-slate-600 peer-checked:bg-brand-600"></div>
             </label>
           </div>
 
@@ -648,7 +648,7 @@ console.log(message.content);`;
                 <button
                   type="button"
                   onClick={handleAddCurrentIp}
-                  className="text-[11px] text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1"
+                  className="text-[11px] text-brand-600 dark:text-brand-400 hover:underline flex items-center gap-1"
                 >
                   <span>📍 添加当前 IP ({ipForm.client_ip})</span>
                 </button>
@@ -807,8 +807,8 @@ console.log(message.content);`;
 
           { }
           {rotatingProviderId && (
-            <div className="p-4 rounded-xl bg-blue-50/60 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 space-y-3">
-              <div className="text-xs font-bold text-blue-900 dark:text-blue-200">
+            <div className="p-4 rounded-xl bg-brand-50/60 dark:bg-brand-950/40 border border-brand-200 dark:border-brand-800 space-y-3">
+              <div className="text-xs font-bold text-brand-900 dark:text-brand-200">
                 🔑 输入新的 API Key 立即替换
               </div>
               <Input
@@ -933,7 +933,7 @@ console.log(message.content);`;
               href={`${baseUrl}/v1/openapi.json`}
               target="_blank"
               rel="noreferrer"
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-900/60 hover:bg-blue-100 transition-colors"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-brand-50 dark:bg-brand-950/60 text-brand-700 dark:text-brand-300 border border-brand-200 dark:border-brand-900/60 hover:bg-brand-100 transition-colors"
             >
               <IconFileText />
               <span>查看 openapi.json</span>
@@ -1188,7 +1188,7 @@ console.log(message.content);`;
             <button
               onClick={() => setActiveSnippetTab("openai")}
               className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors shrink-0 ${
-                activeSnippetTab === "openai" ? "bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-400" : "text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800"
+                activeSnippetTab === "openai" ? "bg-brand-50 text-brand-700 dark:bg-brand-950/60 dark:text-brand-400" : "text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800"
               }`}
             >
               OpenAI SDK (Python)

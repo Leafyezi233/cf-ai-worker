@@ -62,8 +62,8 @@ function NavButton({ section, active, vertical, onChange }: { section: ConsoleSe
   if (!vertical) {
     return <button type="button" data-section={section} aria-current={active ? "page" : undefined} title={item.hint}
       onClick={() => onChange(section)}
-      className={"inline-flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 " + (active
-        ? "bg-blue-600 text-white shadow-sm shadow-blue-600/20"
+      className={"inline-flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 " + (active
+        ? "bg-brand-600 text-white"
         : "bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700")}>
       <Icon className="h-4 w-4 shrink-0" />
       <span>{item.label}</span>
@@ -72,13 +72,14 @@ function NavButton({ section, active, vertical, onChange }: { section: ConsoleSe
   }
   return <button type="button" data-section={section} aria-current={active ? "page" : undefined}
     onClick={() => onChange(section)}
-    className={"group flex w-full min-w-0 items-start gap-3 rounded-lg px-3 py-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 " + (active
-      ? "bg-blue-50 text-blue-700 dark:bg-blue-950/50 dark:text-blue-200"
-      : "text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800")}>
-    <Icon className={"mt-0.5 h-4 w-4 shrink-0 " + (active ? "text-blue-600 dark:text-blue-300" : "text-slate-400 group-hover:text-slate-600 dark:text-slate-500 dark:group-hover:text-slate-300")} />
+    className={"group flex w-full min-w-0 items-start gap-3 rounded-lg px-3 py-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 " + (active
+      ? "bg-brand-50 text-brand-700 dark:bg-brand-500/10 dark:text-brand-200"
+      : "text-slate-600 hover:bg-slate-100/70 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-slate-100")}>
+    <Icon className={"mt-0.5 h-4 w-4 shrink-0 " + (active ? "text-brand-600 dark:text-brand-300" : "text-slate-400 group-hover:text-slate-600 dark:text-slate-500 dark:group-hover:text-slate-300")} />
     <span className="min-w-0">
-      <span className="block text-sm font-medium">{item.label}</span>
-      <span className={"block truncate text-xs " + (active ? "text-blue-600/80 dark:text-blue-300/70" : "text-slate-400 dark:text-slate-500")}>{item.hint}</span>
+      <span className={"block text-sm " + (active ? "font-semibold" : "font-medium")}>{item.label}</span>
+      {/* The hint explains where you are; listing it under every item made the menu hard to scan. */}
+      <span className={active ? "block truncate text-xs text-brand-600/80 dark:text-brand-300/70" : "sr-only"}>{item.hint}</span>
     </span>
   </button>;
 }
@@ -96,7 +97,7 @@ export function ConsoleNavigation({ active, onChange, vertical = false }: { acti
   }
   return <nav aria-label="控制台导航" className="space-y-5">
     {CONSOLE_SECTION_GROUPS.map(group => <div key={group.label}>
-      <div className="mb-1 px-3 text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">{group.label}</div>
+      <div className="mb-1 px-3 text-[11px] font-semibold tracking-wider text-slate-400 dark:text-slate-500">{group.label}</div>
       <div className="space-y-0.5">
         {group.sections.map(section => <NavButton key={section} section={section} active={active === section} vertical onChange={onChange} />)}
       </div>
@@ -108,7 +109,7 @@ export function ConsoleSectionIntro({ section, actions }: { section: ConsoleSect
   const current = consoleSectionMeta(section);
   return <div className="flex flex-wrap items-end justify-between gap-3">
     <div className="min-w-0 max-w-3xl">
-      <h2 className="text-xl font-semibold tracking-tight text-slate-900 dark:text-slate-100">{current.label}</h2>
+      <h2 className="text-2xl font-semibold tracking-tight text-slate-900 dark:text-slate-50">{current.label}</h2>
       <p className="mt-1 text-sm leading-6 text-slate-500 dark:text-slate-400">{current.description}</p>
     </div>
     {actions ? <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div> : null}

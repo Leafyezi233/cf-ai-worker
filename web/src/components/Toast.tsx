@@ -57,7 +57,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
             <div className="mt-0.5 shrink-0">
               {toast.type === "success" && <IconCheck className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />}
               {toast.type === "error" && <IconAlertTriangle className="w-4 h-4 text-rose-600 dark:text-rose-400" />}
-              {toast.type === "info" && <IconInfo className="w-4 h-4 text-blue-400" />}
+              {toast.type === "info" && <IconInfo className="w-4 h-4 text-brand-400" />}
             </div>
             <div className="flex-1 leading-relaxed break-words">{toast.message}</div>
             <button

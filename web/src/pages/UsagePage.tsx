@@ -560,9 +560,9 @@ export default function UsagePage() {
             <>
               { }
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5 sm:gap-4">
-                <div className="p-4 rounded-2xl bg-gradient-to-br from-purple-50 to-indigo-50/50 dark:from-purple-950/30 dark:to-indigo-950/20 border border-purple-100 dark:border-purple-900/40">
-                  <div className="text-xs font-medium text-purple-700 dark:text-purple-300">当月总消耗费用</div>
-                  <div className="text-2xl sm:text-3xl font-extrabold text-purple-950 dark:text-purple-100 mt-1">
+                <div className="p-4 rounded-2xl bg-white border border-slate-200/70 shadow-card dark:bg-slate-900 dark:border-slate-800 dark:shadow-none">
+                  <div className="text-xs font-medium text-slate-500 dark:text-slate-400">当月总消耗费用</div>
+                  <div className="text-2xl sm:text-3xl font-semibold tracking-tight tabular-nums text-slate-900 dark:text-slate-50 mt-1">
                     ¥{monthlyReport.total_cost_usd.toFixed(2)}
                   </div>
                   <div className="flex items-center gap-1.5 mt-2 text-xs font-medium">
@@ -582,9 +582,9 @@ export default function UsagePage() {
                   </div>
                 </div>
 
-                <div className="p-4 rounded-2xl bg-gradient-to-br from-blue-50 to-cyan-50/50 dark:from-blue-950/30 dark:to-cyan-950/20 border border-blue-100 dark:border-blue-900/40">
-                  <div className="text-xs font-medium text-blue-700 dark:text-blue-300">总调用次数</div>
-                  <div className="text-2xl sm:text-3xl font-extrabold text-blue-950 dark:text-blue-100 mt-1">
+                <div className="p-4 rounded-2xl bg-white border border-slate-200/70 shadow-card dark:bg-slate-900 dark:border-slate-800 dark:shadow-none">
+                  <div className="text-xs font-medium text-slate-500 dark:text-slate-400">总调用次数</div>
+                  <div className="text-2xl sm:text-3xl font-semibold tracking-tight tabular-nums text-slate-900 dark:text-slate-50 mt-1">
                     {monthlyReport.total_requests.toLocaleString()} <span className="text-sm font-normal">次</span>
                   </div>
                   <div className="flex items-center gap-1.5 mt-2 text-xs font-medium">
@@ -604,9 +604,9 @@ export default function UsagePage() {
                   </div>
                 </div>
 
-                <div className="p-4 rounded-2xl bg-gradient-to-br from-slate-50 to-slate-100/60 dark:from-slate-800/60 dark:to-slate-800/40 border border-slate-200/80 dark:border-slate-700/60">
-                  <div className="text-xs font-medium text-slate-600 dark:text-slate-400">累计消耗 Tokens</div>
-                  <div className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-slate-100 mt-1">
+                <div className="p-4 rounded-2xl bg-white border border-slate-200/70 shadow-card dark:bg-slate-900 dark:border-slate-800 dark:shadow-none">
+                  <div className="text-xs font-medium text-slate-500 dark:text-slate-400">累计消耗 Tokens</div>
+                  <div className="text-2xl sm:text-3xl font-semibold tracking-tight tabular-nums text-slate-900 dark:text-slate-50 mt-1">
                     {fmtNum(monthlyReport.total_tokens)}
                   </div>
                   <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-2 font-mono">
@@ -614,13 +614,13 @@ export default function UsagePage() {
                   </div>
                 </div>
 
-                <div className="p-4 rounded-2xl bg-gradient-to-br from-emerald-50 to-teal-50/50 dark:from-emerald-950/30 dark:to-teal-950/20 border border-emerald-100 dark:border-emerald-900/40">
-                  <div className="text-xs font-medium text-emerald-700 dark:text-emerald-300">KV 响应缓存节省</div>
-                  <div className="text-2xl sm:text-3xl font-extrabold text-emerald-950 dark:text-emerald-100 mt-1">
+                <div className="p-4 rounded-2xl bg-white border border-slate-200/70 shadow-card dark:bg-slate-900 dark:border-slate-800 dark:shadow-none">
+                  <div className="text-xs font-medium text-slate-500 dark:text-slate-400">KV 响应缓存节省</div>
+                  <div className="text-2xl sm:text-3xl font-semibold tracking-tight tabular-nums text-slate-900 dark:text-slate-50 mt-1">
                     ¥{monthlyReport.cache_saved_cost_usd.toFixed(2)}
                   </div>
-                  <div className="text-[11px] text-emerald-700 dark:text-emerald-300 mt-2 font-medium">
-                    ⚡ 命中 {monthlyReport.cache_hit_count} 次 ({fmtNum(monthlyReport.cache_saved_tokens)} Tokens)
+                  <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-2 font-medium">
+                    命中 {monthlyReport.cache_hit_count} 次 ({fmtNum(monthlyReport.cache_saved_tokens)} Tokens)
                   </div>
                 </div>
               </div>
@@ -878,7 +878,7 @@ export default function UsagePage() {
                             </div>
                             <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-1.5 overflow-hidden">
                               <div
-                                className="h-full bg-indigo-500 dark:bg-indigo-400 rounded-full transition-all duration-300"
+                                className="h-full bg-brand-500 dark:bg-brand-400 rounded-full transition-all duration-300"
                                 style={{ width: `${Math.min(100, m.share_percent)}%` }}
                               />
                             </div>

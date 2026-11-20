@@ -11,16 +11,19 @@ import {
   type ConsoleModels,
   type ConsoleModelMarketplace,
   type ConsoleQuota,
+  type ConsoleSubTokenList,
   type ConsoleUsage,
 } from "../api/consoleClient";
 import { invalidateCache, useQuery } from "../hooks/useQuery";
-import { Badge, Button, Card, CopyButton, Empty, Input, Spinner } from "../components/ui";
-import { IconAlertTriangle, IconInfo, IconLogOut, IconRefresh } from "../components/icons";
+import { Badge, Button, Card, CopyButton, Empty, Input, Spinner, BrandLockup, BrandMark } from "../components/ui";
+import { IconAlertTriangle, IconCheck, IconInfo, IconLogOut, IconRefresh } from "../components/icons";
 import { ThemeToggle } from "../components/ThemeToggle";
 import { AccountPanel, PasswordScreen } from "../components/ConsoleAccount";
 import { ConsoleChatCard } from "../components/ConsoleChatCard";
 import { ConsoleModelsSquare } from "../components/ConsoleModelsSquare";
-import { ConsoleGuide } from "../components/ConsoleGuide";
+import { ConsoleGuide, type GuidePrefs } from "../components/ConsoleGuide";
+import { ConsoleAccessCard } from "../components/ConsoleAccessCard";
+import { UsageTrend } from "../components/UsageTrend";
 import { ConsoleVideoCard } from "../components/ConsoleVideoCard";
 import { ConsoleStandardVideoCard } from "../components/ConsoleStandardVideoCard";
 import ConsoleMonthlyPass from "../components/ConsoleMonthlyPass";
@@ -63,7 +66,7 @@ function fingerprint(token: string): string {
 
 type Tone = "info" | "warning" | "danger";
 const NOTICE_TONES: Record<Tone, string> = {
-  info: "border-blue-200 bg-blue-50 text-blue-800 dark:border-blue-900/60 dark:bg-blue-950/30 dark:text-blue-200",
+  info: "border-brand-200 bg-brand-50 text-brand-800 dark:border-brand-900/60 dark:bg-brand-950/30 dark:text-brand-200",
   warning: "border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200",
   danger: "border-rose-200 bg-rose-50 text-rose-800 dark:border-rose-900/60 dark:bg-rose-950/30 dark:text-rose-200",
 };
@@ -91,9 +94,9 @@ function Stat({ label, value, hint, tone, id, children }: {
   label: string; value: string; hint?: ReactNode; tone?: "danger" | "muted"; id?: string; children?: ReactNode;
 }) {
   return (
-    <div data-stat={id} className="min-w-0 rounded-xl border border-slate-200/80 bg-white px-4 py-3.5 dark:border-slate-800 dark:bg-slate-900">
+    <div data-stat={id} className="min-w-0 rounded-2xl border border-slate-200/70 bg-white px-4 py-4 shadow-card dark:border-slate-800 dark:bg-slate-900 dark:shadow-none sm:px-5">
       <div className="text-xs font-medium text-slate-500 dark:text-slate-400">{label}</div>
-      <div className={"mt-1 truncate text-xl font-semibold tabular-nums tracking-tight " + (tone === "danger" ? "text-rose-600 dark:text-rose-400" : tone === "muted" ? "text-slate-500 dark:text-slate-400" : "text-slate-900 dark:text-slate-100")}>{value}</div>
+      <div className={"mt-1.5 truncate text-2xl font-semibold tabular-nums tracking-tight " + (tone === "danger" ? "text-rose-600 dark:text-rose-400" : tone === "muted" ? "text-slate-500 dark:text-slate-400" : "text-slate-900 dark:text-slate-50")}>{value}</div>
       {hint ? <div className="mt-0.5 text-xs leading-5 text-slate-500 dark:text-slate-400">{hint}</div> : null}
       {children}
     </div>
@@ -102,7 +105,7 @@ function Stat({ label, value, hint, tone, id, children }: {
 
 function SpendMeter({ used, limit }: { used: number; limit: number }) {
   const ratio = limit > 0 ? Math.min(1, Math.max(0, used / limit)) : 0;
-  const tone = ratio >= 1 ? "bg-rose-500" : ratio >= 0.8 ? "bg-amber-500" : "bg-blue-500";
+  const tone = ratio >= 1 ? "bg-rose-500" : ratio >= 0.8 ? "bg-amber-500" : "bg-brand-500";
   return (
     <div className="mt-2">
       <div className="h-1.5 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800" role="progressbar" aria-label="本月花费占上限比例"
@@ -121,14 +124,49 @@ const QUICK_START: ReadonlyArray<{ section: ConsoleSection; title: string; text:
   { section: "usage", title: "查看用量与账单", text: "按时间核对调用与花费" },
 ];
 
-function QuickStart({ onOpen }: { onOpen: (section: ConsoleSection) => void }) {
+/** First-run progress from /me: an API key exists, then the account has made a call. */
+export function onboardingSteps(me: ConsoleMe["device"] | undefined) {
+  if (!me || me.api_key_count === undefined) return null;
+  return [
+    { key: "key", section: "keys" as ConsoleSection, title: "创建 API 密钥", action: "创建 API 密钥", done: me.api_key_count > 0 },
+    { key: "call", section: "guide" as ConsoleSection, title: "配置客户端，完成第一次调用", action: "打开接入指南", done: Boolean(me.last_used_at) },
+  ];
+}
+
+function QuickStart({ onOpen, me }: { onOpen: (section: ConsoleSection) => void; me: ConsoleMe["device"] | undefined }) {
+  const steps = onboardingSteps(me);
+  const next = steps?.find((step) => !step.done);
+  const doneCount = steps ? steps.filter((step) => step.done).length : 0;
   return (
     <Card title="快速开始">
-      <ol className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+      {steps && next ? (
+        <div className="mb-4 rounded-xl border border-brand-200/80 bg-gradient-to-br from-brand-50 via-white to-white p-4 dark:border-brand-900/60 dark:from-brand-500/10 dark:via-slate-900 dark:to-slate-900">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="min-w-0">
+              <div className="text-sm font-semibold text-slate-900 dark:text-slate-50">还差 {steps.length - doneCount} 步就能在自己的应用里调用</div>
+              <div className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">已完成 {doneCount} / {steps.length}</div>
+            </div>
+            <Button size="sm" onClick={() => onOpen(next.section)}>{next.action} →</Button>
+          </div>
+          <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-brand-100 dark:bg-brand-500/15" role="progressbar" aria-label="接入进度" aria-valuemin={0} aria-valuemax={steps.length} aria-valuenow={doneCount}>
+            <div className="h-full rounded-full bg-brand-600 transition-all" style={{ width: `${(doneCount / steps.length) * 100}%` }} />
+          </div>
+          <ol className="mt-3 grid gap-2 sm:grid-cols-2">
+            {steps.map((step, index) => <li key={step.key} className="flex items-center gap-2 text-xs">
+              <span aria-hidden="true" className={"flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold " + (step.done ? "bg-emerald-500 text-white" : step === next ? "bg-brand-600 text-white" : "bg-slate-200 text-slate-600 dark:bg-slate-700 dark:text-slate-300")}>
+                {step.done ? <IconCheck className="h-3 w-3" /> : index + 1}
+              </span>
+              <span className={step.done ? "text-slate-400 line-through dark:text-slate-500" : "font-medium text-slate-800 dark:text-slate-100"}>{step.title}</span>
+              <span className="sr-only">{step.done ? "（已完成）" : "（未完成）"}</span>
+            </li>)}
+          </ol>
+        </div>
+      ) : null}
+      <ol className="grid gap-2 sm:grid-cols-2">
         {QUICK_START.map((step, index) => <li key={step.section}>
           <button type="button" onClick={() => onOpen(step.section)}
-            className="group flex h-full w-full items-start gap-3 rounded-lg border border-slate-200 p-3 text-left transition-colors hover:border-blue-300 hover:bg-blue-50/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 dark:border-slate-800 dark:hover:border-blue-800 dark:hover:bg-blue-950/30">
-            <span aria-hidden="true" className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-blue-50 text-xs font-semibold text-blue-700 group-hover:bg-blue-600 group-hover:text-white dark:bg-blue-950 dark:text-blue-300">{index + 1}</span>
+            className="group flex h-full w-full items-start gap-3 rounded-xl border border-slate-200/80 p-3.5 text-left transition-colors hover:border-brand-300 hover:bg-brand-50/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 dark:border-slate-800 dark:hover:border-brand-700 dark:hover:bg-brand-500/10">
+            <span aria-hidden="true" className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-brand-50 text-xs font-semibold text-brand-700 transition-colors group-hover:bg-brand-600 group-hover:text-white dark:bg-brand-500/15 dark:text-brand-300">{index + 1}</span>
             <span className="min-w-0">
               <span className="block text-sm font-medium text-slate-900 dark:text-slate-100">{step.title}</span>
               <span className="mt-0.5 block text-xs leading-5 text-slate-500 dark:text-slate-400">{step.text}</span>
@@ -156,7 +194,7 @@ function BalanceChip({ quota, onOpen }: { quota: AccountBalance | undefined; onO
   const warn = !danger && quota.low_balance_warning;
   return (
     <button type="button" onClick={onOpen} title="可用余额（点击查看余额与额度）"
-      className={"inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium tabular-nums transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 " + (danger
+      className={"inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium tabular-nums transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 " + (danger
         ? "border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100 dark:border-rose-900/60 dark:bg-rose-950/40 dark:text-rose-300"
         : warn ? "border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-300"
         : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800")}>
@@ -202,6 +240,8 @@ export default function ConsolePage() {
   const [accountSection, setAccountSection] = useState<"keys" | "security" | null>(null);
   useEffect(() => { if (tab === "keys" || tab === "security") setAccountSection(tab); }, [tab]);
   const [offset, setOffset] = useState(0);
+  const [keyFilter, setKeyFilter] = useState("");
+  const [guidePrefs, setGuidePrefs] = useState<GuidePrefs>({});
 
   useEffect(() => {
     setConsoleUnauthorizedHandler(() => {
@@ -233,8 +273,14 @@ export default function ConsolePage() {
     ttlMs: 15_000,
   });
   const usageQuery = useQuery<ConsoleUsage>(
-    token ? `console:${scope}:usage:${range}:${offset}` : null,
-    () => fetcher(`/console/usage?range=${range}&limit=${PAGE_SIZE}&offset=${offset}`),
+    token ? `console:${scope}:usage:${range}:${offset}:${keyFilter}` : null,
+    () => fetcher(`/console/usage?range=${range}&limit=${PAGE_SIZE}&offset=${offset}${keyFilter ? "&sub_token_id=" + encodeURIComponent(keyFilter) : ""}`),
+    { enabled: authenticated && tab === "usage" }
+  );
+  // Key names for the usage filter and the details column; the same list the keys page shows.
+  const keysQuery = useQuery<ConsoleSubTokenList>(
+    token ? `console:${scope}:tokens:with-revoked` : null,
+    () => consoleAccountApi.tokens(true),
     { enabled: authenticated && tab === "usage" }
   );
   const modelsQuery = useQuery<ConsoleModels>(token ? `console:${scope}:models` : null, () => fetcher("/console/models"), {
@@ -340,6 +386,10 @@ export default function ConsolePage() {
   const usage = usageQuery.data;
   const models = modelsQuery.data;
   const rangeLabel = RANGES.find(r => r.key === range)?.label;
+  const keyItems = keysQuery.data?.items ?? [];
+  const keyNames = new Map(keyItems.map((item) => [item.id, item.name]));
+  const keyLabel = (id: string | null | undefined) => !id ? "主 Token" : keyNames.get(id) ?? (keysQuery.data ? "已删除的密钥" : "…");
+  const openModelInGuide = (id: string) => { setGuidePrefs((prefs) => ({ ...prefs, model: id })); setTab("guide"); };
   const refreshing = meQuery.isRefreshing || quotaQuery.isRefreshing || usageQuery.isRefreshing || modelsQuery.isRefreshing || marketplaceQuery.isRefreshing;
 
   const accountAlerts = <>
@@ -365,18 +415,14 @@ export default function ConsolePage() {
 
   return (
     <div className="flex min-h-screen bg-slate-50 dark:bg-slate-950">
-      <a href="#console-main" className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-2 focus:z-50 focus:rounded focus:bg-white focus:p-3 focus:text-blue-700">跳到主要内容</a>
+      <a href="#console-main" className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-2 focus:z-50 focus:rounded focus:bg-white focus:p-3 focus:text-brand-700">跳到主要内容</a>
       <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-r border-slate-200/80 bg-white dark:border-slate-800 dark:bg-slate-900 md:flex">
-        <div className="flex items-center gap-2.5 px-5 py-4">
-          <span aria-hidden="true" className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-600 text-[11px] font-bold text-white shadow-sm shadow-blue-600/30">CPG</span>
-          <div className="min-w-0">
-            <div className="text-sm font-semibold tracking-tight text-slate-900 dark:text-slate-100">用户控制台</div>
-            <div className="truncate text-xs text-slate-400 dark:text-slate-500">AI 网关</div>
-          </div>
+        <div className="flex h-16 items-center border-b border-slate-100 px-5 dark:border-slate-800">
+          <BrandLockup subtitle="用户控制台" />
         </div>
-        <div className="flex-1 overflow-y-auto px-3 py-2"><ConsoleNavigation active={tab} onChange={setTab} vertical /></div>
+        <div className="flex-1 overflow-y-auto px-3 py-4"><ConsoleNavigation active={tab} onChange={setTab} vertical /></div>
         <div className="border-t border-slate-100 p-3 dark:border-slate-800">
-          <div className="rounded-lg bg-slate-50 px-3 py-2.5 dark:bg-slate-800/60">
+          <div className="rounded-xl border border-slate-200/70 px-3 py-2.5 dark:border-slate-800">
             <div className="flex items-center justify-between gap-2">
               <div className="min-w-0 truncate text-sm font-medium text-slate-800 dark:text-slate-100">{me?.name || "正在读取账户"}</div>
               {me ? <span className={"h-2 w-2 shrink-0 rounded-full " + (me.enabled ? "bg-emerald-500" : "bg-rose-500")} title={me.enabled ? "账户已启用" : "账户已停用"} /> : null}
@@ -393,10 +439,10 @@ export default function ConsolePage() {
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-30 border-b border-slate-200/80 bg-white/90 px-4 py-2.5 backdrop-blur dark:border-slate-800 dark:bg-slate-900/90 sm:px-6">
+        <header className="sticky top-0 z-30 border-b border-slate-200/80 bg-white/85 px-4 py-2.5 backdrop-blur-md dark:border-slate-800 dark:bg-slate-900/85 sm:px-6 md:flex md:h-16 md:flex-col md:justify-center">
           <div className="flex items-center justify-between gap-2">
             <div className="flex min-w-0 items-center gap-2">
-              <span aria-hidden="true" className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-blue-600 text-[10px] font-bold text-white md:hidden">CPG</span>
+              <BrandMark className="h-7 w-7 md:hidden" />
               <h1 className="truncate text-sm font-semibold text-slate-900 dark:text-slate-100">
                 <span className="md:hidden">用户控制台</span>
                 <span className="hidden md:inline">{me?.name || "用户控制台"}</span>
@@ -427,6 +473,7 @@ export default function ConsolePage() {
 
           {tab === "guide" ? (
             <ConsoleGuide models={modelsQuery.data} onOpenModels={() => setTab("models")} onOpenKeys={() => setTab("keys")}
+              apiKeyCount={me?.api_key_count} prefs={guidePrefs} onPrefsChange={setGuidePrefs}
               playground={<ConsoleChatCard models={models || null} />} />
           ) : null}
 
@@ -435,6 +482,7 @@ export default function ConsolePage() {
               models={marketplaceQuery.data}
               loading={marketplaceQuery.loading}
               error={marketplaceQuery.error}
+              onUseModel={openModelInGuide}
             />
           ) : null}
 
@@ -444,8 +492,8 @@ export default function ConsolePage() {
             ) : null}
             <section aria-labelledby="console-balance-heading" className="space-y-3">
               <div>
-                <h3 id="console-balance-heading" className="font-semibold text-slate-900 dark:text-slate-100">余额与额度</h3>
-                <p className="mt-1 text-sm leading-6 text-slate-500 dark:text-slate-400">月卡额度与钱包余额分开计算，用量花费不等同于钱包扣款。</p>
+                <h3 id="console-balance-heading" className="text-sm font-semibold text-slate-900 dark:text-slate-100">余额与额度</h3>
+                <p className="mt-0.5 text-xs leading-5 text-slate-500 dark:text-slate-400">月卡额度与钱包余额分开计算，用量花费不等同于钱包扣款。</p>
               </div>
               {quotaQuery.error ? <p role="alert" className="text-sm text-rose-600 dark:text-rose-400">余额读取失败，请点击“刷新数据”重试。</p> : null}
               <div className="grid gap-3 md:grid-cols-3">
@@ -461,20 +509,30 @@ export default function ConsolePage() {
                   hint="进行中的请求暂扣，结束后按实际用量结算" />
               </div>
             </section>
-            <QuickStart onOpen={setTab} />
+            <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_24rem]">
+              <QuickStart onOpen={setTab} me={me} />
+              <ConsoleAccessCard onOpenGuide={() => setTab("guide")} />
+            </div>
             <ConsoleMonthlyPass scope={scope} onChange={() => { void quotaQuery.refresh(true).catch(() => {}); }} />
           </> : null}
 
           {tab === "usage" ? <>
             <section aria-labelledby="console-usage-heading" className="space-y-3">
               <div className="flex flex-wrap items-start justify-between gap-3">
-                <h3 id="console-usage-heading" className="font-semibold text-slate-900 dark:text-slate-100">用量统计 · {rangeLabel}</h3>
+                <h3 id="console-usage-heading" className="text-sm font-semibold text-slate-900 dark:text-slate-100">用量统计 · {rangeLabel}{keyFilter ? " · " + keyLabel(keyFilter) : ""}</h3>
+                <div className="flex flex-wrap items-center gap-2">
+                <select aria-label="按 API 密钥筛选" value={keyFilter} onChange={(e) => { setKeyFilter(e.target.value); setOffset(0); }}
+                  className="h-8 max-w-[14rem] rounded-lg border border-slate-200 bg-white px-2.5 text-xs text-slate-700 focus:border-brand-500 focus:outline-none focus:ring-4 focus:ring-brand-500/10 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200">
+                  <option value="">全部密钥与主 Token</option>
+                  {keyItems.map((item) => <option key={item.id} value={item.id}>{item.name}{item.revoked ? "（已撤销）" : ""}</option>)}
+                </select>
                 <div role="group" aria-label="用量时间范围" className="inline-flex rounded-lg border border-slate-200 bg-white p-0.5 dark:border-slate-700 dark:bg-slate-900">
                   {RANGES.map(r => <button key={r.key} type="button" aria-pressed={range === r.key}
                     onClick={() => { setRange(r.key); setOffset(0); }}
-                    className={"rounded-md px-3 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 " + (range === r.key
-                      ? "bg-blue-600 text-white shadow-sm"
+                    className={"rounded-md px-3 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 " + (range === r.key
+                      ? "bg-brand-600 text-white shadow-sm"
                       : "text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800")}>{r.label}</button>)}
+                </div>
                 </div>
               </div>
               {usageQuery.error ? <p role="alert" className="text-sm text-rose-600 dark:text-rose-400">用量读取失败，请刷新重试；无法读取不代表没有调用记录。</p> : null}
@@ -491,6 +549,10 @@ export default function ConsolePage() {
                 <Stat label="输出 Token" value={usage ? fmtInt(usage.summary.output_tokens) : "—"} />
               </div>
             </section>
+
+            {usage && range !== "24h" && usage.range && usage.daily?.length ? (
+              <UsageTrend daily={usage.daily} from={usage.range.from} to={usage.range.to} />
+            ) : null}
 
             <Card title="按模型用量">
               {usageQuery.loading ? (
@@ -537,6 +599,7 @@ export default function ConsolePage() {
                       <tr className="text-left text-xs text-slate-500 dark:text-slate-400">
                         <th scope="col" className="py-2 pr-3 font-medium">时间</th>
                         <th scope="col" className="py-2 pr-3 font-medium">模型</th>
+                        <th scope="col" className="py-2 pr-3 font-medium">密钥</th>
                         <th scope="col" className="py-2 pr-3 text-right font-medium">Token</th>
                         <th scope="col" className="py-2 pr-3 text-right font-medium">耗时</th>
                         <th scope="col" className="py-2 text-right font-medium">花费</th>
@@ -547,6 +610,7 @@ export default function ConsolePage() {
                         <tr key={it.id} className="border-t border-slate-100 dark:border-slate-800">
                           <td className="whitespace-nowrap py-2 pr-3 text-slate-600 dark:text-slate-300">{fmtTime(it.created_at)}</td>
                           <td className="py-2 pr-3 text-slate-800 dark:text-slate-200">{it.model || "-"}</td>
+                          <td className="max-w-[10rem] truncate py-2 pr-3 text-slate-500 dark:text-slate-400" title={keyLabel(it.sub_token_id)}>{keyLabel(it.sub_token_id)}</td>
                           <td className="py-2 pr-3 text-right">{fmtInt(it.total_tokens)}</td>
                           <td className="py-2 pr-3 text-right">{it.latency_ms ? `${it.latency_ms} ms` : "-"}</td>
                           <td className="whitespace-nowrap py-2 text-right">

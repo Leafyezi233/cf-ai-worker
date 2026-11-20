@@ -9,6 +9,8 @@ import { useQuery } from "../hooks/useQuery";
 import { Badge, Button, Card, CopyButton, Empty, Input, Spinner } from "./ui";
 import { useToast } from "./Toast";
 import { ConsoleTokenPolicies } from "./ConsoleTokenPolicies";
+import { IconCheck, IconKey, IconShield } from "./icons";
+import { relativeTime } from "../utils/relativeTime";
 import { ConsoleAuthShell } from "./ConsoleAuthShell";
 
 const PASSWORD_MIN = 8;
@@ -304,9 +306,22 @@ export function AccountPanel({ scope, section, active = true, onCallsChange, onS
   </div>;
 
   const keysBlock = showKeys && <div className="space-y-4">
-    <p className="text-xs leading-5 text-slate-500 dark:text-slate-400">
-      每个应用单独创建一个，泄露时只需撤销那一个。子 Token 的花费计入本账户，不能用来登录控制台。
-    </p>
+    <div className="grid gap-3 sm:grid-cols-2">
+      <div className="rounded-xl border border-brand-200/80 bg-brand-50/60 p-3.5 dark:border-brand-900/60 dark:bg-brand-500/10">
+        <div className="flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-slate-50">
+          <span aria-hidden="true" className="flex h-6 w-6 items-center justify-center rounded-lg bg-brand-600 text-white"><IconKey className="h-3.5 w-3.5" /></span>
+          API 密钥（子 Token）
+        </div>
+        <p className="mt-1.5 text-xs leading-5 text-slate-600 dark:text-slate-300">填进应用和代码里调用模型。每个应用单独创建一个，泄露时只需撤销那一个；花费计入本账户。</p>
+      </div>
+      <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-3.5 dark:border-slate-800 dark:bg-slate-800/30">
+        <div className="flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-slate-50">
+          <span aria-hidden="true" className="flex h-6 w-6 items-center justify-center rounded-lg bg-slate-700 text-white dark:bg-slate-600"><IconShield className="h-3.5 w-3.5" /></span>
+          登录 Token（主 Token）
+        </div>
+        <p className="mt-1.5 text-xs leading-5 text-slate-600 dark:text-slate-300">用来登录这个控制台，由管理员分配。不要填进第三方应用；子 Token 不能用来登录。</p>
+      </div>
+    </div>
     <form className="flex flex-col gap-2 sm:flex-row" onSubmit={(e) => { e.preventDefault(); void create(); }}>
       <Input
         aria-label="新子 Token 的用途备注"
@@ -322,17 +337,26 @@ export function AccountPanel({ scope, section, active = true, onCallsChange, onS
     </form>
     {atLimit ? <p className="text-xs text-amber-700 dark:text-amber-300">已达到 {limit} 个可用子 Token 的上限；撤销不再使用的子 Token 后可再创建。</p> : null}
     {freshToken && freshToken.epoch === secretContext.current.epoch ? (
-      <div role="status" className="rounded-xl border border-amber-300 bg-amber-50 p-4 dark:border-amber-900/60 dark:bg-amber-950/30">
-        <div className="text-sm font-medium text-amber-900 dark:text-amber-200">
-          「{freshToken.name}」已创建，明文只显示这一次，请立即复制保存：
+      <div role="status" className="overflow-hidden rounded-xl border border-emerald-300/80 bg-white shadow-card dark:border-emerald-800/70 dark:bg-slate-900 dark:shadow-none">
+        <div className="flex items-start gap-2.5 border-b border-emerald-200/70 bg-emerald-50 px-4 py-3 dark:border-emerald-900/60 dark:bg-emerald-950/30">
+          <span aria-hidden="true" className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-emerald-500 text-white"><IconCheck className="h-3 w-3" /></span>
+          <div className="min-w-0 text-sm font-medium text-emerald-900 dark:text-emerald-200">
+            「{freshToken.name}」已创建，明文只显示这一次，请立即复制保存：
+          </div>
         </div>
-        <div className="mt-2 flex items-center gap-2 rounded-lg border border-amber-200 bg-white px-3 py-2 dark:border-amber-900/60 dark:bg-slate-950">
-          <code className="min-w-0 flex-1 break-all font-mono text-xs text-slate-900 dark:text-amber-100">{freshToken.token}</code>
-          <CopyButton text={freshToken.token} label="复制" />
+        <div className="p-4">
+        <div className="flex items-center gap-2 rounded-lg border border-slate-800 bg-[#0b1020] px-3 py-2.5">
+          <code className="m-0 min-w-0 flex-1 break-all rounded-none border-0 bg-transparent p-0 font-mono text-[13px] text-emerald-300 dark:bg-transparent dark:text-emerald-300">{freshToken.token}</code>
+          <CopyButton text={freshToken.token} label="复制" className="rounded-md bg-white/10 px-2.5 py-1 text-white hover:bg-white/20" />
+        </div>
+        <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500 dark:text-slate-400">
+          <span>粘贴到应用的“API Key / API 密钥”一栏。</span>
+          <CopyButton text={'export CPG_API_KEY="' + freshToken.token + '"'} label="复制为环境变量" className="rounded px-1 py-0.5 text-brand-600 hover:bg-brand-50 dark:text-brand-400 dark:hover:bg-brand-500/10" />
         </div>
         <div className="mt-3 flex flex-wrap gap-2">
           <Button type="button" size="sm" variant="outline" onClick={() => setFreshToken(null)}>我已保存</Button>
           {onOpenGuide && <Button type="button" size="sm" onClick={() => { setFreshToken(null); onOpenGuide(); }}>前往接入指南</Button>}
+        </div>
         </div>
       </div>
     ) : null}
@@ -358,7 +382,10 @@ export function AccountPanel({ scope, section, active = true, onCallsChange, onS
             <tbody>
               {rows.map((row) => (
                 <tr key={row.id} className={"border-t border-slate-100 dark:border-slate-800" + (row.revoked ? " text-slate-400 dark:text-slate-500" : "")}>
-                  <td className="py-2 pr-3 text-slate-800 dark:text-slate-200">{row.name}</td>
+                  <td className="py-2.5 pr-3">
+                    <div className={"font-medium " + (row.revoked ? "" : "text-slate-800 dark:text-slate-200")}>{row.name}</div>
+                    {row.created_at ? <div className="text-[11px] text-slate-400 dark:text-slate-500">创建于 {new Date(row.created_at).toLocaleDateString()}</div> : null}
+                  </td>
                   <td className="py-2 pr-3">
                     {row.revoked ? (
                       <Badge tone="slate">已撤销</Badge>
@@ -369,7 +396,7 @@ export function AccountPanel({ scope, section, active = true, onCallsChange, onS
                     )}
                   </td>
                   <td className="py-2 pr-3 text-xs text-slate-500 dark:text-slate-400">
-                    {row.last_used_at ? new Date(row.last_used_at).toLocaleString() : "从未使用"}
+                    {row.last_used_at ? <span title={new Date(row.last_used_at).toLocaleString()}>{relativeTime(row.last_used_at)}</span> : "从未使用"}
                   </td>
                   <td className="whitespace-nowrap py-2 text-right">
                     {row.revoked ? null : (
@@ -398,7 +425,7 @@ export function AccountPanel({ scope, section, active = true, onCallsChange, onS
         type="checkbox"
         checked={showRevoked}
         onChange={(e) => setShowRevoked(e.target.checked)}
-        className="h-3.5 w-3.5 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+        className="h-3.5 w-3.5 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
       />
       <span>显示已撤销</span>
     </label>
