@@ -447,7 +447,7 @@ export default function DevicesPage() {
               type="checkbox"
               checked={showRevoked}
               onChange={(e) => setFilter("revoked", e.target.checked ? "1" : "")}
-              className="h-3.5 w-3.5 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+              className="h-3.5 w-3.5 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
             />
             <span>显示已撤销</span>
           </label>
@@ -500,7 +500,7 @@ export default function DevicesPage() {
                   return (
                     <tr key={d.id} className="hover:bg-slate-50/60 dark:hover:bg-slate-800/50 transition-colors">
                       <td className="py-3 px-3">
-                        <button type="button" onClick={() => setDetailId(d.id)} className="text-left font-semibold text-blue-700 hover:underline dark:text-blue-400 whitespace-nowrap">{d.name}</button>
+                        <button type="button" onClick={() => setDetailId(d.id)} className="text-left font-semibold text-brand-700 hover:underline dark:text-brand-400 whitespace-nowrap">{d.name}</button>
                         <div className="text-[11px] text-slate-500 dark:text-slate-400 whitespace-nowrap">{routingText(d)}</div>
                       </td>
                       <td className="py-3 px-2 whitespace-nowrap">
@@ -1101,7 +1101,7 @@ export default function DevicesPage() {
                 setSubTokensShowRevoked(next);
                 if (subTokensDevice) void loadSubTokens(subTokensDevice, next);
               }}
-              className="h-3.5 w-3.5 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+              className="h-3.5 w-3.5 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
             />
             <span>显示已撤销</span>
           </label>

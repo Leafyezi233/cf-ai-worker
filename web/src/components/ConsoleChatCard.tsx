@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Button, Card, Empty, Select, Textarea } from "./ui";
 import { isTextModel } from "../utils/modelType";
 import { streamConsoleChat, type ConsoleModels } from "../api/consoleClient";
+import { explainGatewayError } from "../utils/gatewayErrors";
 
 const EFFORT_LEVELS = [
   { effort: "low", description: "低" },
@@ -20,7 +21,7 @@ function Bubble({ role, children, pending = false }: { role: ChatMessage["role"]
   const mine = role === "user";
   return <div className={"flex " + (mine ? "justify-end" : "justify-start")}>
     <div className={"max-w-[85%] whitespace-pre-wrap break-words rounded-2xl px-3.5 py-2 text-sm leading-6 " + (mine
-      ? "rounded-br-sm bg-blue-600 text-white"
+      ? "rounded-br-sm bg-brand-600 text-white"
       : "rounded-bl-sm bg-white text-slate-800 ring-1 ring-slate-200 dark:bg-slate-800 dark:text-slate-100 dark:ring-slate-700")}>
       <span className="sr-only">{mine ? "你：" : "模型："}</span>
       {children || (pending ? "…" : "")}
@@ -86,7 +87,7 @@ export function ConsoleChatCard({ models }: { models: ConsoleModels | null }) {
         controller.signal
       );
     } catch (err: any) {
-      if (err?.name !== "AbortError") setError(err?.message || "请求失败");
+      if (err?.name !== "AbortError") setError(explainGatewayError(err?.code, err?.message || "请求失败"));
     } finally {
       setStreaming(false);
       abortRef.current = null;

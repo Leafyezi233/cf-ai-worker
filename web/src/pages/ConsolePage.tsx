@@ -14,7 +14,7 @@ import {
   type ConsoleUsage,
 } from "../api/consoleClient";
 import { invalidateCache, useQuery } from "../hooks/useQuery";
-import { Badge, Button, Card, CopyButton, Empty, Input, Spinner } from "../components/ui";
+import { Badge, Button, Card, CopyButton, Empty, Input, Spinner, BrandLockup, BrandMark } from "../components/ui";
 import { IconAlertTriangle, IconInfo, IconLogOut, IconRefresh } from "../components/icons";
 import { ThemeToggle } from "../components/ThemeToggle";
 import { AccountPanel, PasswordScreen } from "../components/ConsoleAccount";
@@ -63,7 +63,7 @@ function fingerprint(token: string): string {
 
 type Tone = "info" | "warning" | "danger";
 const NOTICE_TONES: Record<Tone, string> = {
-  info: "border-blue-200 bg-blue-50 text-blue-800 dark:border-blue-900/60 dark:bg-blue-950/30 dark:text-blue-200",
+  info: "border-brand-200 bg-brand-50 text-brand-800 dark:border-brand-900/60 dark:bg-brand-950/30 dark:text-brand-200",
   warning: "border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200",
   danger: "border-rose-200 bg-rose-50 text-rose-800 dark:border-rose-900/60 dark:bg-rose-950/30 dark:text-rose-200",
 };
@@ -91,9 +91,9 @@ function Stat({ label, value, hint, tone, id, children }: {
   label: string; value: string; hint?: ReactNode; tone?: "danger" | "muted"; id?: string; children?: ReactNode;
 }) {
   return (
-    <div data-stat={id} className="min-w-0 rounded-xl border border-slate-200/80 bg-white px-4 py-3.5 dark:border-slate-800 dark:bg-slate-900">
+    <div data-stat={id} className="min-w-0 rounded-2xl border border-slate-200/70 bg-white px-4 py-4 shadow-card dark:border-slate-800 dark:bg-slate-900 dark:shadow-none sm:px-5">
       <div className="text-xs font-medium text-slate-500 dark:text-slate-400">{label}</div>
-      <div className={"mt-1 truncate text-xl font-semibold tabular-nums tracking-tight " + (tone === "danger" ? "text-rose-600 dark:text-rose-400" : tone === "muted" ? "text-slate-500 dark:text-slate-400" : "text-slate-900 dark:text-slate-100")}>{value}</div>
+      <div className={"mt-1.5 truncate text-2xl font-semibold tabular-nums tracking-tight " + (tone === "danger" ? "text-rose-600 dark:text-rose-400" : tone === "muted" ? "text-slate-500 dark:text-slate-400" : "text-slate-900 dark:text-slate-50")}>{value}</div>
       {hint ? <div className="mt-0.5 text-xs leading-5 text-slate-500 dark:text-slate-400">{hint}</div> : null}
       {children}
     </div>
@@ -102,7 +102,7 @@ function Stat({ label, value, hint, tone, id, children }: {
 
 function SpendMeter({ used, limit }: { used: number; limit: number }) {
   const ratio = limit > 0 ? Math.min(1, Math.max(0, used / limit)) : 0;
-  const tone = ratio >= 1 ? "bg-rose-500" : ratio >= 0.8 ? "bg-amber-500" : "bg-blue-500";
+  const tone = ratio >= 1 ? "bg-rose-500" : ratio >= 0.8 ? "bg-amber-500" : "bg-brand-500";
   return (
     <div className="mt-2">
       <div className="h-1.5 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800" role="progressbar" aria-label="本月花费占上限比例"
@@ -127,8 +127,8 @@ function QuickStart({ onOpen }: { onOpen: (section: ConsoleSection) => void }) {
       <ol className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
         {QUICK_START.map((step, index) => <li key={step.section}>
           <button type="button" onClick={() => onOpen(step.section)}
-            className="group flex h-full w-full items-start gap-3 rounded-lg border border-slate-200 p-3 text-left transition-colors hover:border-blue-300 hover:bg-blue-50/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 dark:border-slate-800 dark:hover:border-blue-800 dark:hover:bg-blue-950/30">
-            <span aria-hidden="true" className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-blue-50 text-xs font-semibold text-blue-700 group-hover:bg-blue-600 group-hover:text-white dark:bg-blue-950 dark:text-blue-300">{index + 1}</span>
+            className="group flex h-full w-full items-start gap-3 rounded-xl border border-slate-200/80 p-3.5 text-left transition-colors hover:border-brand-300 hover:bg-brand-50/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 dark:border-slate-800 dark:hover:border-brand-700 dark:hover:bg-brand-500/10">
+            <span aria-hidden="true" className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-brand-50 text-xs font-semibold text-brand-700 transition-colors group-hover:bg-brand-600 group-hover:text-white dark:bg-brand-500/15 dark:text-brand-300">{index + 1}</span>
             <span className="min-w-0">
               <span className="block text-sm font-medium text-slate-900 dark:text-slate-100">{step.title}</span>
               <span className="mt-0.5 block text-xs leading-5 text-slate-500 dark:text-slate-400">{step.text}</span>
@@ -156,7 +156,7 @@ function BalanceChip({ quota, onOpen }: { quota: AccountBalance | undefined; onO
   const warn = !danger && quota.low_balance_warning;
   return (
     <button type="button" onClick={onOpen} title="可用余额（点击查看余额与额度）"
-      className={"inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium tabular-nums transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 " + (danger
+      className={"inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium tabular-nums transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 " + (danger
         ? "border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100 dark:border-rose-900/60 dark:bg-rose-950/40 dark:text-rose-300"
         : warn ? "border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-300"
         : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800")}>
@@ -365,18 +365,14 @@ export default function ConsolePage() {
 
   return (
     <div className="flex min-h-screen bg-slate-50 dark:bg-slate-950">
-      <a href="#console-main" className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-2 focus:z-50 focus:rounded focus:bg-white focus:p-3 focus:text-blue-700">跳到主要内容</a>
+      <a href="#console-main" className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-2 focus:z-50 focus:rounded focus:bg-white focus:p-3 focus:text-brand-700">跳到主要内容</a>
       <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-r border-slate-200/80 bg-white dark:border-slate-800 dark:bg-slate-900 md:flex">
-        <div className="flex items-center gap-2.5 px-5 py-4">
-          <span aria-hidden="true" className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-600 text-[11px] font-bold text-white shadow-sm shadow-blue-600/30">CPG</span>
-          <div className="min-w-0">
-            <div className="text-sm font-semibold tracking-tight text-slate-900 dark:text-slate-100">用户控制台</div>
-            <div className="truncate text-xs text-slate-400 dark:text-slate-500">AI 网关</div>
-          </div>
+        <div className="flex h-16 items-center border-b border-slate-100 px-5 dark:border-slate-800">
+          <BrandLockup subtitle="用户控制台" />
         </div>
-        <div className="flex-1 overflow-y-auto px-3 py-2"><ConsoleNavigation active={tab} onChange={setTab} vertical /></div>
+        <div className="flex-1 overflow-y-auto px-3 py-4"><ConsoleNavigation active={tab} onChange={setTab} vertical /></div>
         <div className="border-t border-slate-100 p-3 dark:border-slate-800">
-          <div className="rounded-lg bg-slate-50 px-3 py-2.5 dark:bg-slate-800/60">
+          <div className="rounded-xl border border-slate-200/70 px-3 py-2.5 dark:border-slate-800">
             <div className="flex items-center justify-between gap-2">
               <div className="min-w-0 truncate text-sm font-medium text-slate-800 dark:text-slate-100">{me?.name || "正在读取账户"}</div>
               {me ? <span className={"h-2 w-2 shrink-0 rounded-full " + (me.enabled ? "bg-emerald-500" : "bg-rose-500")} title={me.enabled ? "账户已启用" : "账户已停用"} /> : null}
@@ -393,10 +389,10 @@ export default function ConsolePage() {
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-30 border-b border-slate-200/80 bg-white/90 px-4 py-2.5 backdrop-blur dark:border-slate-800 dark:bg-slate-900/90 sm:px-6">
+        <header className="sticky top-0 z-30 border-b border-slate-200/80 bg-white/85 px-4 py-2.5 backdrop-blur-md dark:border-slate-800 dark:bg-slate-900/85 sm:px-6 md:flex md:h-16 md:flex-col md:justify-center">
           <div className="flex items-center justify-between gap-2">
             <div className="flex min-w-0 items-center gap-2">
-              <span aria-hidden="true" className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-blue-600 text-[10px] font-bold text-white md:hidden">CPG</span>
+              <BrandMark className="h-7 w-7 md:hidden" />
               <h1 className="truncate text-sm font-semibold text-slate-900 dark:text-slate-100">
                 <span className="md:hidden">用户控制台</span>
                 <span className="hidden md:inline">{me?.name || "用户控制台"}</span>
@@ -444,8 +440,8 @@ export default function ConsolePage() {
             ) : null}
             <section aria-labelledby="console-balance-heading" className="space-y-3">
               <div>
-                <h3 id="console-balance-heading" className="font-semibold text-slate-900 dark:text-slate-100">余额与额度</h3>
-                <p className="mt-1 text-sm leading-6 text-slate-500 dark:text-slate-400">月卡额度与钱包余额分开计算，用量花费不等同于钱包扣款。</p>
+                <h3 id="console-balance-heading" className="text-sm font-semibold text-slate-900 dark:text-slate-100">余额与额度</h3>
+                <p className="mt-0.5 text-xs leading-5 text-slate-500 dark:text-slate-400">月卡额度与钱包余额分开计算，用量花费不等同于钱包扣款。</p>
               </div>
               {quotaQuery.error ? <p role="alert" className="text-sm text-rose-600 dark:text-rose-400">余额读取失败，请点击“刷新数据”重试。</p> : null}
               <div className="grid gap-3 md:grid-cols-3">
@@ -468,12 +464,12 @@ export default function ConsolePage() {
           {tab === "usage" ? <>
             <section aria-labelledby="console-usage-heading" className="space-y-3">
               <div className="flex flex-wrap items-start justify-between gap-3">
-                <h3 id="console-usage-heading" className="font-semibold text-slate-900 dark:text-slate-100">用量统计 · {rangeLabel}</h3>
+                <h3 id="console-usage-heading" className="text-sm font-semibold text-slate-900 dark:text-slate-100">用量统计 · {rangeLabel}</h3>
                 <div role="group" aria-label="用量时间范围" className="inline-flex rounded-lg border border-slate-200 bg-white p-0.5 dark:border-slate-700 dark:bg-slate-900">
                   {RANGES.map(r => <button key={r.key} type="button" aria-pressed={range === r.key}
                     onClick={() => { setRange(r.key); setOffset(0); }}
-                    className={"rounded-md px-3 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 " + (range === r.key
-                      ? "bg-blue-600 text-white shadow-sm"
+                    className={"rounded-md px-3 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 " + (range === r.key
+                      ? "bg-brand-600 text-white shadow-sm"
                       : "text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800")}>{r.label}</button>)}
                 </div>
               </div>

@@ -398,7 +398,7 @@ export function AccountPanel({ scope, section, active = true, onCallsChange, onS
         type="checkbox"
         checked={showRevoked}
         onChange={(e) => setShowRevoked(e.target.checked)}
-        className="h-3.5 w-3.5 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+        className="h-3.5 w-3.5 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
       />
       <span>显示已撤销</span>
     </label>

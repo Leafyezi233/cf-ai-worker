@@ -1,10 +1,10 @@
 import { useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
-import { Button, Input } from "../components/ui";
+import { BrandMark, Button, Input } from "../components/ui";
 import { ThemeToggle } from "../components/ThemeToggle";
 import { ApiError } from "../api/client";
-import { IconZap, IconShield } from "../components/icons";
+import { IconShield } from "../components/icons";
 
 export default function LoginPage() {
   const { login } = useAuth();
@@ -28,23 +28,21 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="relative flex min-h-screen items-center justify-center bg-gradient-to-br from-slate-100 via-slate-50 to-blue-50/30 dark:from-slate-950 dark:via-slate-900 dark:to-blue-950/20 p-4 transition-colors">
+    <div className="relative flex min-h-screen items-center justify-center bg-slate-50 dark:bg-slate-950 p-4">
       <div className="fixed top-4 right-4 z-20">
         <ThemeToggle />
       </div>
 
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-500 text-white shadow-lg shadow-blue-500/25 mb-4">
-            <IconZap className="w-6 h-6 text-white" />
-          </div>
-          <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100 tracking-tight">AI Gateway</h1>
-          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">请输入管理员密码访问控制台</p>
+          <BrandMark className="mx-auto mb-4 h-11 w-11" />
+          <h1 className="text-xl font-semibold text-slate-900 dark:text-slate-100 tracking-tight">CPG 管理后台</h1>
+          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">输入管理员密码登录</p>
         </div>
 
         <form
           onSubmit={onSubmit}
-          className="space-y-4 rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900/90 p-6 shadow-xl shadow-slate-200/50 dark:shadow-slate-950/50 backdrop-blur-sm"
+          className="space-y-4 rounded-2xl border border-slate-200/70 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 shadow-pop dark:shadow-none"
         >
           <div>
             <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
@@ -66,7 +64,7 @@ export default function LoginPage() {
             </div>
           ) : null}
 
-          <Button disabled={busy} className="w-full justify-center py-2 text-sm shadow-md" size="lg">
+          <Button disabled={busy} className="w-full justify-center text-sm" size="lg">
             {busy ? "正在验证…" : "进入管理端"}
           </Button>
 

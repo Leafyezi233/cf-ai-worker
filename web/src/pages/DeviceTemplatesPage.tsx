@@ -466,7 +466,7 @@ export default function DeviceTemplatesPage() {
                     name="model_scope"
                     checked={draft.model_scope === scope}
                     onChange={() => setDraft({ ...draft, model_scope: scope })}
-                    className="mt-0.5 accent-indigo-600"
+                    className="mt-0.5 accent-brand-600"
                   />
                   <span className="min-w-0">
                     <span className="block text-sm font-medium text-slate-800 dark:text-slate-100">{SCOPE_LABELS[scope]}</span>
@@ -506,7 +506,7 @@ export default function DeviceTemplatesPage() {
                         type="checkbox"
                         checked={checked}
                         onChange={() => toggleModel(m.id)}
-                        className="accent-indigo-600"
+                        className="accent-brand-600"
                       />
                       <span className="flex-1 min-w-0 text-xs text-slate-700 dark:text-slate-200 truncate">
                         {m.display_name || m.model_name}
@@ -541,7 +541,7 @@ export default function DeviceTemplatesPage() {
                         type="checkbox"
                         checked={checked}
                         onChange={() => toggleGroup(g.id)}
-                        className="accent-indigo-600"
+                        className="accent-brand-600"
                       />
                       <span className="flex-1 min-w-0 text-xs text-slate-700 dark:text-slate-200 truncate">
                         {g.display_name || g.name}
@@ -599,7 +599,7 @@ export default function DeviceTemplatesPage() {
                     setApplyMode("replace");
                     setPreview(null);
                   }}
-                  className="mt-0.5 accent-indigo-600"
+                  className="mt-0.5 accent-brand-600"
                 />
                 <span className="min-w-0">
                   <span className="block text-sm font-medium text-slate-800 dark:text-slate-100">替换（默认）</span>
@@ -617,7 +617,7 @@ export default function DeviceTemplatesPage() {
                     setApplyMode("merge");
                     setPreview(null);
                   }}
-                  className="mt-0.5 accent-indigo-600"
+                  className="mt-0.5 accent-brand-600"
                 />
                 <span className="min-w-0">
                   <span className="block text-sm font-medium text-slate-800 dark:text-slate-100">合并</span>
@@ -643,7 +643,7 @@ export default function DeviceTemplatesPage() {
                     setApplyAll(e.target.checked);
                     setPreview(null);
                   }}
-                  className="accent-indigo-600"
+                  className="accent-brand-600"
                 />
                 <span>全部设备</span>
               </label>
@@ -659,7 +659,7 @@ export default function DeviceTemplatesPage() {
                       setPreview(null);
                       setApplyIds((ids) => (ids.includes(d.id) ? ids.filter((x) => x !== d.id) : [...ids, d.id]));
                     }}
-                    className="accent-indigo-600"
+                    className="accent-brand-600"
                   />
                   <span className="flex-1 min-w-0 text-xs text-slate-700 dark:text-slate-200 truncate">{d.name}</span>
                   <Badge tone={d.model_scope === "all" ? "slate" : "blue"}>
