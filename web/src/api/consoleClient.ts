@@ -174,6 +174,8 @@ export interface ConsoleMe {
     created_at: number;
     password_setup_required?: boolean;
     calls_enabled?: boolean;
+    /** Live (not revoked) API keys; absent on older servers. */
+    api_key_count?: number;
   };
 }
 
@@ -359,6 +361,18 @@ export interface ConsoleServiceGroupPreview {
   }>;
 }
 
+export interface ConsoleApiKeyCheck {
+  kind: "api_key" | "login_token" | "unknown";
+  name: string | null;
+  status: "active" | "disabled" | "revoked" | null;
+  /** The pasted text had spaces, quotes or a "Bearer " prefix around the key. */
+  cleaned: boolean;
+  calls_enabled: boolean;
+  available_usd: number;
+  model_count: number | null;
+  models: string[];
+}
+
 export interface ConsoleSubTokenList {
   items: ConsoleSubToken[];
   limit: number;
@@ -419,6 +433,8 @@ export const consoleAccountApi = {
       "/console/tokens/" + encodeURIComponent(id) + "/revoke",
       { method: "POST" }
     ),
+  checkApiKey: (key: string) =>
+    request<ConsoleApiKeyCheck>("/console/api-key-check", { method: "POST", body: JSON.stringify({ key }) }),
   calls: () => request<{ calls_enabled: boolean }>("/console/calls"),
   setCalls: (enabled: boolean) =>
     request<{ calls_enabled: boolean }>("/console/calls", {

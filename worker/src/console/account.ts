@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { previewTokenRouting } from "./routing_preview";
 import type { Context } from "hono";
 import type { AuthedDevice, Env } from "../types";
-import { resolveDevice } from "../gateway/auth";
+import { resolveDevice, resolveToken } from "../gateway/auth";
 import { resolveModelType } from "../gateway/model_type";
 import {
   checkDeviceRateLimit,
@@ -23,6 +23,7 @@ import {
   LOGIN_LOCK_MS,
   LOGIN_ATTEMPT_WINDOW_MS,
   SUB_TOKEN_LIMIT,
+  getWallet,
 } from "../db/repo";
 import { listSelectableServiceGroups } from "../db/service_groups";
 import { getTokenRoutingPolicy, putTokenRoutingPolicy, parseTokenRoutingPolicy, resolveTokenRoutingPolicy, ensureTokenPoliciesSchema, tokenPolicyWriteStatements, singleSelectionPolicy } from "../db/token_policies";
@@ -626,6 +627,52 @@ accountApp.post("/tokens/:id/revoke", async (c) => {
   return c.json({ item: { id: row.id, name: row.name, enabled: false, revoked: true } });
 });
 
+
+/**
+ * Lets a signed-in user paste an API key and learn whether it works for this account, without
+ * spending anything. Only keys that belong to the caller's own account are described; anything
+ * else is reported as "unknown", so the endpoint cannot be used to probe other accounts.
+ */
+accountApp.post("/api-key-check", async (c) => {
+  const master = await requireAccount(c);
+  if ("response" in master) return master.response;
+  const device = master.device;
+  const body = await readJson(c);
+  const raw = typeof body?.key === "string" ? body.key : "";
+  if (!raw.trim() || raw.length > 1024) return c.json({ error: "invalid_body", message: "请粘贴要检查的 API 密钥" }, 400);
+  // Clients often keep a stray space, quotes or a "Bearer " prefix copied from an example.
+  const key = raw.trim().replace(/^bearer\s+/i, "").replace(/^["']|["']$/g, "").trim();
+  const cleaned = key !== raw;
+  const wallet = await getWallet(c.env, device.id);
+  const account = {
+    calls_enabled: Number(device.calls_enabled ?? 1) !== 0,
+    available_usd: Number((wallet.balance_usd - wallet.reserved_usd).toFixed(4)),
+  };
+  const usable = await resolveToken(c.env, key);
+  if (usable && usable.id === device.id) {
+    const rows = await listModelProjectionsForDevice(c.env, usable);
+    const models = [...new Set((rows as Array<{ model_name?: string | null; alias?: string | null }>)
+      .map(row => row.alias || row.model_name || "").filter(Boolean))];
+    const sub = usable.sub_token_id ? await getSubTokenById(c.env, device.id, usable.sub_token_id) : null;
+    return c.json({
+      kind: usable.auth_via === "sub" ? "api_key" : "login_token",
+      name: sub?.name ?? null,
+      status: "active",
+      cleaned,
+      ...account,
+      model_count: models.length,
+      models: models.slice(0, 12),
+    });
+  }
+  const hash = await hashToken(key);
+  const own = await c.env.DB.prepare(
+    "SELECT name, enabled, revoked_at FROM device_sub_tokens WHERE token_hash = ? AND device_id = ?"
+  ).bind(hash, device.id).first<{ name: string; enabled: number; revoked_at: number | null }>();
+  if (own) {
+    return c.json({ kind: "api_key", name: own.name, status: own.revoked_at ? "revoked" : "disabled", cleaned, ...account, model_count: null, models: [] });
+  }
+  return c.json({ kind: "unknown", name: null, status: null, cleaned, ...account, model_count: null, models: [] });
+});
 
 accountApp.get("/calls", async (c) => {
   const master = await requireMaster(c);

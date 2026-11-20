@@ -21,6 +21,12 @@
     @apply px-1.5 py-0.5 mx-0.5 text-[0.85em] font-mono rounded bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 border border-slate-200/80 dark:border-slate-700/80;
   }
 
+  /* Code inside a block keeps the block's own look; the inline chip style above is for prose. */
+  pre code {
+    @apply p-0 m-0 rounded-none border-0 bg-transparent dark:bg-transparent text-inherit dark:text-inherit;
+    font-size: inherit;
+  }
+
   ::-webkit-scrollbar {
     width: 6px;
     height: 6px;
